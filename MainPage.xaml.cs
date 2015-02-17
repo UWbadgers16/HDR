@@ -60,6 +60,12 @@ namespace HDR
 			// Windows.Phone.UI.Input.HardwareButtons.BackPressed event.
 			// If you are using the NavigationHelper provided by some templates,
             // this event is handled for you.
+
+            InitializeCamera();
+		}
+        
+        private async void InitializeCamera()
+        {
             mediaCapture = new MediaCapture();
             deviceInformation = await GetCameraDeviceInfoAsync(Windows.Devices.Enumeration.Panel.Back);
 
@@ -91,14 +97,26 @@ namespace HDR
             previewElement.Source = mediaCapture;
             mediaCapture.SetPreviewRotation(VideoRotation.Clockwise90Degrees);
             await mediaCapture.StartPreviewAsync();
-		}
+        }
+
+        private static async Task<DeviceInformation> GetCameraDeviceInfoAsync(Windows.Devices.Enumeration.Panel desiredPanel)
+        {
+            DeviceInformation device = (await DeviceInformation.FindAllAsync(DeviceClass.VideoCapture))
+                .FirstOrDefault(d => d.EnclosureLocation != null && d.EnclosureLocation.Panel == desiredPanel);
+
+            if (device == null)
+            {
+                throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "No suitable devices found for the camera of type {0}.", desiredPanel));
+            }
+
+            return device;
+        }
 
 		private async void captureButton_Click(object sender, RoutedEventArgs e)
         {
             await mediaCapture.VideoDeviceController.FocusControl.FocusAsync();
             await mediaCapture.VideoDeviceController.ExposureCompensationControl.SetValueAsync(mediaCapture.VideoDeviceController.ExposureCompensationControl.Min);
             byte[] firstImage = await SaveImageGetPixels();
-            
 
             await mediaCapture.VideoDeviceController.ExposureCompensationControl.SetValueAsync(0);
             byte[] secondImage = await SaveImageGetPixels();
@@ -161,19 +179,6 @@ namespace HDR
             memStream.Dispose();
 
             return pixels;
-        }
-
-        private static async Task<DeviceInformation> GetCameraDeviceInfoAsync(Windows.Devices.Enumeration.Panel desiredPanel)
-        {
-            DeviceInformation device = (await DeviceInformation.FindAllAsync(DeviceClass.VideoCapture))
-                .FirstOrDefault(d => d.EnclosureLocation != null && d.EnclosureLocation.Panel == desiredPanel);
-
-            if (device == null)
-            {
-                throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "No suitable devices found for the camera of type {0}.", desiredPanel));
-            }
-
-            return device;
         }
 	}
 }

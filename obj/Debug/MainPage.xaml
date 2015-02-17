@@ -8,8 +8,8 @@
     mc:Ignorable="d"
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
 
-    <Grid VerticalAlignment="Bottom">
-        <CaptureElement x:Name="previewElement" Stretch="UniformToFill" />
+    <Grid>
+        <CaptureElement x:Name="previewElement" Stretch="UniformToFill"/>
         <Grid VerticalAlignment="Bottom">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"></RowDefinition>
@@ -19,5 +19,6 @@
             <Button x:ConnectionId='1' Grid.Row="0" x:Name="captureButton" Content="capture"                             HorizontalAlignment="Stretch" Margin="12,0"/>
         </Grid>
     </Grid>
+
 </Page>
 

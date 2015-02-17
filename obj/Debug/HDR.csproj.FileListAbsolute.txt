@@ -30,3 +30,10 @@ c:\users\john\Development\Visual_Studio\HDR\HDR\obj\Debug\qualifiers.txt
 c:\users\john\Development\Visual_Studio\HDR\HDR\obj\Debug\qualifiers.txt.intermediate
 c:\users\john\Development\Visual_Studio\HDR\HDR\obj\Debug\MultipleQualifiersPerDimensionFound.txt
 c:\users\john\Development\Visual_Studio\HDR\HDR\obj\Debug\ProjectArchitectures.txt
+C:\Users\John\Development\Visual_Studio\HDR\HDR\bin\Debug\MathNet.Numerics.dll
+C:\Users\John\Development\Visual_Studio\HDR\HDR\bin\Debug\MathNet.Numerics.xml
+C:\Users\John\Development\Visual_Studio\HDR\HDR\obj\Debug\HDR.csprojResolveAssemblyReference.cache
+C:\Users\John\Development\Visual_Studio\HDR\HDR\obj\Debug\MathNet.Numerics\en\MathNet.Numerics.Properties.Resources.resw
+C:\Users\John\Development\Visual_Studio\HDR\HDR\obj\Debug\HDR.csproj.GenerateResource.Cache
+C:\Users\John\Development\Visual_Studio\HDR\HDR\obj\Debug\MathNet.Numerics.pri
+C:\Users\John\Development\Visual_Studio\HDR\HDR\obj\Debug\MathNet.Numerics\qualifiers.txt

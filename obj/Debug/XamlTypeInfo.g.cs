@@ -529,4 +529,3 @@ namespace HDR.HDR_XamlTypeInfo
 }
 
 
-

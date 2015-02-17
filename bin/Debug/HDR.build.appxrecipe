@@ -19,6 +19,9 @@
     <AppxPackagedFile Include="C:\Users\John\Development\Visual_Studio\HDR\HDR\bin\Debug\HDR.exe">
       <PackagePath>HDR.exe</PackagePath>
     </AppxPackagedFile>
+    <AppxPackagedFile Include="C:\Users\John\Development\Visual_Studio\HDR\packages\MathNet.Numerics.3.5.0\lib\portable-net45+netcore45+wpa81+wp8+MonoAndroid1+MonoTouch1\MathNet.Numerics.dll">
+      <PackagePath>MathNet.Numerics.dll</PackagePath>
+    </AppxPackagedFile>
     <AppxPackagedFile Include="C:\Users\John\Development\Visual_Studio\HDR\HDR\Assets\Logo.scale-240.png">
       <PackagePath>Assets\Logo.scale-240.png</PackagePath>
       <ReRegisterAppIfChanged>true</ReRegisterAppIfChanged>

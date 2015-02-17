@@ -51,7 +51,7 @@ namespace HDR
 		/// </summary>
 		/// <param name="e">Event data that describes how this page was reached.
 		/// This parameter is typically used to configure the page.</param>
-		protected async override void OnNavigatedTo(NavigationEventArgs e)
+		protected override void OnNavigatedTo(NavigationEventArgs e)
 		{
 			// TODO: Prepare page for display here.
 
@@ -126,14 +126,13 @@ namespace HDR
 
             await mediaCapture.VideoDeviceController.ExposureCompensationControl.SetValueAsync(0);
 
-            messageDialog = new MessageDialog("Images saved and pixels captured");
-            await messageDialog.ShowAsync();
+            PerformHDR(firstImage, secondImage, thirdImage);
 		}
 
         private async Task<Byte[]> SaveImageGetPixels()
         {
-            var photoStorageFileLow = await KnownFolders.CameraRoll.CreateFileAsync("photo.jpg", CreationCollisionOption.GenerateUniqueName);
-            var fileStream = await photoStorageFileLow.OpenAsync(Windows.Storage.FileAccessMode.ReadWrite);
+            var photoStorageFile = await KnownFolders.CameraRoll.CreateFileAsync("photo.jpg", CreationCollisionOption.GenerateUniqueName);
+            var fileStream = await photoStorageFile.OpenAsync(Windows.Storage.FileAccessMode.ReadWrite);
             var imageStream = new InMemoryRandomAccessStream();
             await mediaCapture.CapturePhotoToStreamAsync(imageEncoding, imageStream);
 
@@ -179,6 +178,11 @@ namespace HDR
             memStream.Dispose();
 
             return pixels;
+        }
+
+        private void PerformHDR(byte[] firstImage, byte[] secondImage, byte[] thirdImage)
+        {
+            //MathNet.Numerics.LinearAlgebra.Factorization.sv
         }
 	}
 }

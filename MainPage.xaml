@@ -10,7 +10,6 @@
 
     <Grid VerticalAlignment="Bottom">
         <CaptureElement x:Name="previewElement" Stretch="UniformToFill" />
-        <Image Grid.Row="0" x:Name="takenImage" Stretch="UniformToFill"></Image>
         <Grid VerticalAlignment="Bottom">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"></RowDefinition>

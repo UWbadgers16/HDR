@@ -97,45 +97,35 @@ namespace HDR
         {
             await mediaCapture.VideoDeviceController.FocusControl.FocusAsync();
             await mediaCapture.VideoDeviceController.ExposureCompensationControl.SetValueAsync(mediaCapture.VideoDeviceController.ExposureCompensationControl.Min);
-            var photoStorageFile = await KnownFolders.CameraRoll.CreateFileAsync("photo.jpg", CreationCollisionOption.GenerateUniqueName);
-            await mediaCapture.CapturePhotoToStorageFileAsync(imageEncoding, photoStorageFile);
-            SaveImage(photoStorageFile);
+            byte[] firstImage = await SaveImageGetPixels();
+            
 
             await mediaCapture.VideoDeviceController.ExposureCompensationControl.SetValueAsync(0);
-            photoStorageFile = await KnownFolders.PicturesLibrary.CreateFileAsync("photo.jpg", CreationCollisionOption.GenerateUniqueName);
-            await mediaCapture.CapturePhotoToStorageFileAsync(imageEncoding, photoStorageFile);
-            SaveImage(photoStorageFile);
+            byte[] secondImage = await SaveImageGetPixels();
 
             await mediaCapture.VideoDeviceController.ExposureCompensationControl.SetValueAsync(mediaCapture.VideoDeviceController.ExposureCompensationControl.Max);
-            photoStorageFile = await KnownFolders.PicturesLibrary.CreateFileAsync("photo.jpg", CreationCollisionOption.GenerateUniqueName);
-            await mediaCapture.CapturePhotoToStorageFileAsync(imageEncoding, photoStorageFile);
-            SaveImage(photoStorageFile);
+            byte[] thirdImage = await SaveImageGetPixels();
 
             await mediaCapture.VideoDeviceController.ExposureCompensationControl.SetValueAsync(0);
+
+            messageDialog = new MessageDialog("Images saved and pixels captured");
+            await messageDialog.ShowAsync();
 		}
 
-        private static async Task<DeviceInformation> GetCameraDeviceInfoAsync(Windows.Devices.Enumeration.Panel desiredPanel)
+        private async Task<Byte[]> SaveImageGetPixels()
         {
-            DeviceInformation device = (await DeviceInformation.FindAllAsync(DeviceClass.VideoCapture))
-                .FirstOrDefault(d => d.EnclosureLocation != null && d.EnclosureLocation.Panel == desiredPanel);
+            var photoStorageFileLow = await KnownFolders.CameraRoll.CreateFileAsync("photo.jpg", CreationCollisionOption.GenerateUniqueName);
+            var fileStream = await photoStorageFileLow.OpenAsync(Windows.Storage.FileAccessMode.ReadWrite);
+            var imageStream = new InMemoryRandomAccessStream();
+            await mediaCapture.CapturePhotoToStreamAsync(imageEncoding, imageStream);
 
-            if (device == null)
-            {
-                throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "No suitable devices found for the camera of type {0}.", desiredPanel));
-            }
-
-            return device;
-        }
-
-        private async void SaveImage(StorageFile file)
-        {
-            var fileStream = await file.OpenAsync(Windows.Storage.FileAccessMode.ReadWrite);
+            imageStream.Seek(0);
             var bitmapImage = new BitmapImage();
-            await bitmapImage.SetSourceAsync(fileStream);
-            var decoder = await BitmapDecoder.CreateAsync(fileStream);
+            await bitmapImage.SetSourceAsync(imageStream);
+            var rotateDecoder = await BitmapDecoder.CreateAsync(imageStream);
 
             var memStream = new InMemoryRandomAccessStream();
-            var encoder = await BitmapEncoder.CreateForTranscodingAsync(memStream, decoder);
+            var encoder = await BitmapEncoder.CreateForTranscodingAsync(memStream, rotateDecoder);
 
             encoder.BitmapTransform.Rotation = BitmapRotation.Clockwise90Degrees;
 
@@ -162,8 +152,28 @@ namespace HDR
             fileStream.Size = 0;
             await RandomAccessStream.CopyAsync(memStream, fileStream);
 
+            memStream.Seek(0);
+            var pixelDecoder = await BitmapDecoder.CreateAsync(memStream);
+            var pixelDataProvider = await pixelDecoder.GetPixelDataAsync();
+            byte[] pixels = pixelDataProvider.DetachPixelData();
+
             fileStream.Dispose();
             memStream.Dispose();
+
+            return pixels;
+        }
+
+        private static async Task<DeviceInformation> GetCameraDeviceInfoAsync(Windows.Devices.Enumeration.Panel desiredPanel)
+        {
+            DeviceInformation device = (await DeviceInformation.FindAllAsync(DeviceClass.VideoCapture))
+                .FirstOrDefault(d => d.EnclosureLocation != null && d.EnclosureLocation.Panel == desiredPanel);
+
+            if (device == null)
+            {
+                throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "No suitable devices found for the camera of type {0}.", desiredPanel));
+            }
+
+            return device;
         }
 	}
 }

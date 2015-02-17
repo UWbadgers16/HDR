@@ -17,9 +17,6 @@
     <RootType FullName="Windows.UI.Xaml.Controls.CaptureElement">
       <RootProperty Name="Stretch" />
     </RootType>
-    <RootType FullName="Windows.UI.Xaml.Controls.Image">
-      <RootProperty Name="Stretch" />
-    </RootType>
     <RootType FullName="Windows.UI.Xaml.Controls.RowDefinition">
       <RootProperty Name="Height" />
     </RootType>

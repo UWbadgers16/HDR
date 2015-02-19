@@ -169,84 +169,7 @@ namespace HDR
 
             List<byte[]> pixelImages = await GetPixels(alignedImages);
             alignedImages = null;
-
-            PrintPixels(pixelImages);
 		}
-        /*private async Task<Tuple<byte[], byte[], byte[]>> GetPixels(List<IImageProvider> images)
-        {
-            WriteableBitmap image = new WriteableBitmap(firstImageWidth, firstImageHeight);
-            await images[0].GetBitmapAsync(image, OutputOption.PreserveAspectRatio);
-            byte[] firstImagePixels = image.PixelBuffer.ToArray();
-
-            image = new WriteableBitmap(secondImageWidth, secondImageHeight);
-            await images[1].GetBitmapAsync(image, OutputOption.PreserveAspectRatio);
-            byte[] secondImagePixels = image.PixelBuffer.ToArray();
-
-            image = new WriteableBitmap(secondImageWidth, secondImageHeight);
-            await images[2].GetBitmapAsync(image, OutputOption.PreserveAspectRatio);
-            byte[] thirdImagePixels = image.PixelBuffer.ToArray();
-             
-            images = null;
-
-            return Tuple.Create(firstImagePixels, secondImagePixels, thirdImagePixels);
-        }*/
-
-        private async Task<Byte[]> SaveImageGetPixels()
-        {
-            var photoStorageFile = await KnownFolders.CameraRoll.CreateFileAsync("photo.jpg", CreationCollisionOption.GenerateUniqueName);
-            var fileStream = await photoStorageFile.OpenAsync(Windows.Storage.FileAccessMode.ReadWrite);
-            var imageStream = new InMemoryRandomAccessStream();
-            await mediaCapture.CapturePhotoToStreamAsync(imageEncoding, imageStream);
-
-            imageStream.Seek(0);
-            var bitmapImage = new BitmapImage();
-            await bitmapImage.SetSourceAsync(imageStream);
-            var rotateDecoder = await BitmapDecoder.CreateAsync(imageStream);
-
-            var memStream = new InMemoryRandomAccessStream();
-            var encoder = await BitmapEncoder.CreateForTranscodingAsync(memStream, rotateDecoder);
-
-            encoder.BitmapTransform.Rotation = BitmapRotation.Clockwise90Degrees;
-
-            try
-            {
-                await encoder.FlushAsync();
-            }
-            catch (Exception err)
-            {
-                switch (err.HResult)
-                {
-                    case unchecked((int)0x88982F81): //WINCODEC_ERR_UNSUPPORTEDOPERATION
-                        // If the encoder does not support writing a thumbnail, then try again
-                        // but disable thumbnail generation.
-                        encoder.IsThumbnailGenerated = false;
-                        break;
-                    default:
-                        throw err;
-                }
-            }
-
-            memStream.Seek(0);
-            fileStream.Seek(0);
-            fileStream.Size = 0;
-            await RandomAccessStream.CopyAsync(memStream, fileStream);
-
-            memStream.Seek(0);
-            var pixelDecoder = await BitmapDecoder.CreateAsync(memStream);
-            var pixelDataProvider = await pixelDecoder.GetPixelDataAsync(
-                BitmapPixelFormat.Rgba8, 
-                BitmapAlphaMode.Premultiplied, 
-                new BitmapTransform(), 
-                ExifOrientationMode.RespectExifOrientation, 
-                ColorManagementMode.DoNotColorManage
-                );
-            byte[] pixels = pixelDataProvider.DetachPixelData();
-
-            fileStream.Dispose();
-            memStream.Dispose();
-
-            return pixels;
-        }
 
         private async Task<Tuple<StreamImageSource, double, int, int>> SaveImage()
         {
@@ -330,17 +253,6 @@ namespace HDR
                     {
                         if (alignedSource != null)
                         {
-                            /*var photoStorageFile = await KnownFolders.CameraRoll.CreateFileAsync("photo.jpg", CreationCollisionOption.GenerateUniqueName);
-
-                            using (var fileStream = await photoStorageFile.OpenAsync(Windows.Storage.FileAccessMode.ReadWrite))
-                            using (var renderer = new JpegRenderer())
-                            {
-                                renderer.Source = alignedSource;
-                                IBuffer alignedBuffer = await renderer.RenderAsync();
-                                await fileStream.WriteAsync(alignedBuffer);
-                                await fileStream.FlushAsync();
-                            }*/
-
                             alignedImages.Add(alignedSource);
                             count++;
                         }
@@ -407,17 +319,17 @@ namespace HDR
             {
                 if (alignedSource != null)
                 {
-                    using (var renderer = new JpegRenderer())
+                    using (var renderer = new BitmapRenderer())
                     {
                         renderer.Source = alignedSource;
-                        IBuffer alignedBuffer = await renderer.RenderAsync();
+                        Bitmap alignedBuffer = await renderer.RenderAsync();
 
-                        pixelImages.Add(alignedBuffer.ToArray());
+                        pixelImages.Add(alignedBuffer.Buffers[0].Buffer.ToArray());
                     }
                 }
             }
 
             return pixelImages;
-        } 
+        }
 	}
 }

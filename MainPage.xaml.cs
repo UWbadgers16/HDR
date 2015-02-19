@@ -128,27 +128,19 @@ namespace HDR
         {
             List<IImageProvider> images = new List<IImageProvider>();
             await mediaCapture.VideoDeviceController.FocusControl.FocusAsync();
-            await mediaCapture.VideoDeviceController.IsoSpeedControl.SetValueAsync(200);
 
-            /*var results = await SaveImageGetPixels();
-            byte[] firstImage = results.Item1;*/
             await mediaCapture.VideoDeviceController.ExposureCompensationControl.SetValueAsync(-EV);
             images.Add(await SaveImage());
 
-            /*results = await SaveImageGetPixels();
-            byte[] secondImage = results.Item1;*/
             await mediaCapture.VideoDeviceController.ExposureCompensationControl.SetValueAsync((float)0);
             images.Add(await SaveImage());
             
-            /*results = await SaveImageGetPixels();
-            byte[] thirdImage = results.Item1;*/
             await mediaCapture.VideoDeviceController.ExposureCompensationControl.SetValueAsync(EV);
             images.Add(await SaveImage());
 
             await mediaCapture.VideoDeviceController.ExposureCompensationControl.SetValueAsync(0);
 
-            images = await AlignImages(images);
-            //PerformHDR(firstImage, secondImage, height, width);
+            AlignImages(images);
 		}
 
         private async Task<Byte[]> SaveImageGetPixels()
@@ -264,12 +256,10 @@ namespace HDR
 
         }
 
-        private async Task<List<IImageProvider>> AlignImages(List<IImageProvider> unalignedImages)
+        private async void AlignImages(List<IImageProvider> unalignedImages)
         {
-            List<IImageProvider> alignedImages = new List<IImageProvider>();
             InvalidOperationException ioe = null;
             int count = 0;
-            bool failed = false;
 
             try
             {
@@ -295,7 +285,6 @@ namespace HDR
                                 await fileStream.FlushAsync();
                             }
 
-                            alignedImages.Add(new StorageFileImageSource(photoStorageFile));
                             count++;
                         }
                     }
@@ -304,7 +293,6 @@ namespace HDR
                     {
                         messageDialog = new MessageDialog("Image alignment failed. Your HDR might not be well-aligned.");
                         await messageDialog.ShowAsync();
-                        failed = true;
                     }
                     else
                     {
@@ -321,15 +309,7 @@ namespace HDR
             {
                 messageDialog = new MessageDialog("Image alignment failed. Your HDR might not be well-aligned.");
                 await messageDialog.ShowAsync();
-                failed = true;
-            }
-
-            if (failed)
-            {
-                return unalignedImages;
-            }
-            else
-                return alignedImages;
+            }	
         }
 
 	}

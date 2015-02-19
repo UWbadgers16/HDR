@@ -40,7 +40,9 @@ namespace HDR
         private DeviceInformation deviceInformation;
         private MessageDialog messageDialog;
         private FocusSettings focusSettings;
-        private IReadOnlyList<IImageProvider> alignedImages;
+        private double firstExposureTime, secondExposureTime, thirdExposureTime;
+        private int firstImageHeight, firstImageWidth, secondImageHeight, secondImageWidth, thirdImageHeight, thirdImageWidth;
+        private bool autoISO = false;
 
 		public MainPage()
 		{
@@ -114,6 +116,7 @@ namespace HDR
         {
             CaptureImage((float)2);
         }
+
         private void HDR_Medium_Click(object sender, RoutedEventArgs e)
         {
             CaptureImage((float)1.5);
@@ -124,24 +127,69 @@ namespace HDR
             CaptureImage((float)1);
         }
 
+        private void Auto_ISO_Click(object sender, RoutedEventArgs e)
+        {
+            autoISO = true;
+        }
+
 		private async void CaptureImage(float EV)
         {
             List<IImageProvider> images = new List<IImageProvider>();
             await mediaCapture.VideoDeviceController.FocusControl.FocusAsync();
+            if(!autoISO)
+                await mediaCapture.VideoDeviceController.IsoSpeedControl.SetValueAsync(mediaCapture.VideoDeviceController.IsoSpeedControl.Min);
 
             await mediaCapture.VideoDeviceController.ExposureCompensationControl.SetValueAsync(-EV);
-            images.Add(await SaveImage());
+            var saveImageResults = await SaveImage();
+            images.Add(saveImageResults.Item1);
+            firstExposureTime = saveImageResults.Item2;
+            firstImageHeight = saveImageResults.Item3;
+            firstImageWidth = saveImageResults.Item4;
 
             await mediaCapture.VideoDeviceController.ExposureCompensationControl.SetValueAsync((float)0);
-            images.Add(await SaveImage());
-            
+            saveImageResults = await SaveImage();
+            images.Add(saveImageResults.Item1);
+            secondExposureTime = saveImageResults.Item2;
+            secondImageHeight = saveImageResults.Item3;
+            secondImageWidth = saveImageResults.Item4;
+
             await mediaCapture.VideoDeviceController.ExposureCompensationControl.SetValueAsync(EV);
-            images.Add(await SaveImage());
+            saveImageResults = await SaveImage();
+            images.Add(saveImageResults.Item1);
+            thirdExposureTime = saveImageResults.Item2;
+            thirdImageHeight = saveImageResults.Item3;
+            thirdImageWidth = saveImageResults.Item4;
+
+            saveImageResults = null;
 
             await mediaCapture.VideoDeviceController.ExposureCompensationControl.SetValueAsync(0);
 
-            AlignImages(images);
+            List<IImageProvider> alignedImages = await AlignImages(images);
+            images = null;
+
+            List<byte[]> pixelImages = await GetPixels(alignedImages);
+            alignedImages = null;
+
+            PrintPixels(pixelImages);
 		}
+        /*private async Task<Tuple<byte[], byte[], byte[]>> GetPixels(List<IImageProvider> images)
+        {
+            WriteableBitmap image = new WriteableBitmap(firstImageWidth, firstImageHeight);
+            await images[0].GetBitmapAsync(image, OutputOption.PreserveAspectRatio);
+            byte[] firstImagePixels = image.PixelBuffer.ToArray();
+
+            image = new WriteableBitmap(secondImageWidth, secondImageHeight);
+            await images[1].GetBitmapAsync(image, OutputOption.PreserveAspectRatio);
+            byte[] secondImagePixels = image.PixelBuffer.ToArray();
+
+            image = new WriteableBitmap(secondImageWidth, secondImageHeight);
+            await images[2].GetBitmapAsync(image, OutputOption.PreserveAspectRatio);
+            byte[] thirdImagePixels = image.PixelBuffer.ToArray();
+             
+            images = null;
+
+            return Tuple.Create(firstImagePixels, secondImagePixels, thirdImagePixels);
+        }*/
 
         private async Task<Byte[]> SaveImageGetPixels()
         {
@@ -200,7 +248,7 @@ namespace HDR
             return pixels;
         }
 
-        private async Task<StreamImageSource> SaveImage()
+        private async Task<Tuple<StreamImageSource, double, int, int>> SaveImage()
         {
             var photoStorageFile = await KnownFolders.CameraRoll.CreateFileAsync("photo.jpg", CreationCollisionOption.GenerateUniqueName);
             var fileStream = await photoStorageFile.OpenAsync(Windows.Storage.FileAccessMode.ReadWrite);
@@ -245,21 +293,29 @@ namespace HDR
             var stream = new InMemoryRandomAccessStream();
             stream.Seek(0);
             await RandomAccessStream.CopyAsync(fileStream, stream);
+
+            fileStream.Seek(0);
+            ExifLib.JpegInfo info = ExifLib.ExifReader.ReadJpeg(fileStream.AsStream(), photoStorageFile.Name);
+            double exposureTime = info.ExposureTime;
+            int height = info.Height;
+            int width = info.Width;
             fileStream.Dispose();
-
+            
             stream.Seek(0);
-            return (new StreamImageSource(stream.AsStream()));
+            return Tuple.Create(new StreamImageSource(stream.AsStream()), exposureTime, height, width);
         }
 
-        private async void PerformHDR(byte[] firstImage, byte[] secondImage, uint height, uint width)
+        /*private async void PerformHDR(byte[] firstImage, byte[] secondImage, uint height, uint width)
         {
 
-        }
+        }*/
 
-        private async void AlignImages(List<IImageProvider> unalignedImages)
+        private async Task<List<IImageProvider>> AlignImages(List<IImageProvider> unalignedImages)
         {
+            List<IImageProvider> alignedImages = new List<IImageProvider>();
             InvalidOperationException ioe = null;
             int count = 0;
+            bool failed = false;
 
             try
             {
@@ -274,7 +330,7 @@ namespace HDR
                     {
                         if (alignedSource != null)
                         {
-                            var photoStorageFile = await KnownFolders.CameraRoll.CreateFileAsync("photo.jpg", CreationCollisionOption.GenerateUniqueName);
+                            /*var photoStorageFile = await KnownFolders.CameraRoll.CreateFileAsync("photo.jpg", CreationCollisionOption.GenerateUniqueName);
 
                             using (var fileStream = await photoStorageFile.OpenAsync(Windows.Storage.FileAccessMode.ReadWrite))
                             using (var renderer = new JpegRenderer())
@@ -283,8 +339,9 @@ namespace HDR
                                 IBuffer alignedBuffer = await renderer.RenderAsync();
                                 await fileStream.WriteAsync(alignedBuffer);
                                 await fileStream.FlushAsync();
-                            }
+                            }*/
 
+                            alignedImages.Add(alignedSource);
                             count++;
                         }
                     }
@@ -293,6 +350,7 @@ namespace HDR
                     {
                         messageDialog = new MessageDialog("Image alignment failed. Your HDR might not be well-aligned.");
                         await messageDialog.ShowAsync();
+                        failed = true;
                     }
                     else
                     {
@@ -309,8 +367,57 @@ namespace HDR
             {
                 messageDialog = new MessageDialog("Image alignment failed. Your HDR might not be well-aligned.");
                 await messageDialog.ShowAsync();
-            }	
+                failed = true;
+            }
+
+            if (failed)
+            {
+                alignedImages = null;
+                return unalignedImages;
+            }
+            else
+            {
+                unalignedImages = null;
+                return alignedImages;
+            }
         }
 
+        private async void PrintPixels(List<byte[]> alignedSources)
+        {
+            foreach (var alignedSource in alignedSources)
+            {
+                if (alignedSource != null)
+                {
+                    var photoStorageFile = await KnownFolders.CameraRoll.CreateFileAsync("photo.jpg", CreationCollisionOption.GenerateUniqueName);
+
+                    using (var fileStream = await photoStorageFile.OpenAsync(Windows.Storage.FileAccessMode.ReadWrite))
+                    {
+                        await fileStream.WriteAsync(alignedSource.AsBuffer());
+                        await fileStream.FlushAsync();
+                    }
+                }
+            }
+        }
+
+        private async Task<List<byte[]>> GetPixels(List<IImageProvider> alignedSources)
+        {
+            List<byte[]> pixelImages = new List<byte[]>();
+
+            foreach (var alignedSource in alignedSources)
+            {
+                if (alignedSource != null)
+                {
+                    using (var renderer = new JpegRenderer())
+                    {
+                        renderer.Source = alignedSource;
+                        IBuffer alignedBuffer = await renderer.RenderAsync();
+
+                        pixelImages.Add(alignedBuffer.ToArray());
+                    }
+                }
+            }
+
+            return pixelImages;
+        } 
 	}
 }

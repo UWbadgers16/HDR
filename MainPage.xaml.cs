@@ -23,6 +23,8 @@ using Windows.Storage;
 using Windows.Storage.Streams;
 using Windows.Graphics.Imaging;
 using Windows.UI.Xaml.Media.Imaging;
+using Lumia.Imaging.Transforms;
+using Lumia.Imaging;
 
 // The Blank Page item template is documented at http://go.microsoft.com/fwlink/?LinkId=391641
 
@@ -33,11 +35,12 @@ namespace HDR
 	/// </summary>
 	public sealed partial class MainPage : Page
 	{
-		MediaCapture mediaCapture;
-        ImageEncodingProperties imageEncoding;
-		DeviceInformation deviceInformation;
-		MessageDialog messageDialog;
-        FocusSettings focusSettings;
+		private MediaCapture mediaCapture;
+        private ImageEncodingProperties imageEncoding;
+        private DeviceInformation deviceInformation;
+        private MessageDialog messageDialog;
+        private FocusSettings focusSettings;
+        private IReadOnlyList<IImageProvider> alignedImages;
 
 		public MainPage()
 		{
@@ -88,14 +91,9 @@ namespace HDR
 
             mediaCapture.VideoDeviceController.FlashControl.Enabled = false;
 
-            if (!mediaCapture.VideoDeviceController.ExposureControl.Supported)
-            {
-                messageDialog = new MessageDialog("Exposure control is not supported!");
-                await messageDialog.ShowAsync();
-            }
+            mediaCapture.SetPreviewRotation(VideoRotation.Clockwise90Degrees);
 
             previewElement.Source = mediaCapture;
-            mediaCapture.SetPreviewRotation(VideoRotation.Clockwise90Degrees);
             await mediaCapture.StartPreviewAsync();
         }
 
@@ -112,21 +110,45 @@ namespace HDR
             return device;
         }
 
-		private async void captureButton_Click(object sender, RoutedEventArgs e)
+        private void HDR_High_Click(object sender, RoutedEventArgs e)
         {
+            CaptureImage((float)2);
+        }
+        private void HDR_Medium_Click(object sender, RoutedEventArgs e)
+        {
+            CaptureImage((float)1.5);
+        }
+
+        private void HDR_Low_Click(object sender, RoutedEventArgs e)
+        {
+            CaptureImage((float)1);
+        }
+
+		private async void CaptureImage(float EV)
+        {
+            List<IImageProvider> images = new List<IImageProvider>();
             await mediaCapture.VideoDeviceController.FocusControl.FocusAsync();
-            await mediaCapture.VideoDeviceController.ExposureCompensationControl.SetValueAsync(mediaCapture.VideoDeviceController.ExposureCompensationControl.Min);
-            byte[] firstImage = await SaveImageGetPixels();
+            await mediaCapture.VideoDeviceController.IsoSpeedControl.SetValueAsync(200);
+
+            /*var results = await SaveImageGetPixels();
+            byte[] firstImage = results.Item1;*/
+            await mediaCapture.VideoDeviceController.ExposureCompensationControl.SetValueAsync(-EV);
+            images.Add(await SaveImage());
+
+            /*results = await SaveImageGetPixels();
+            byte[] secondImage = results.Item1;*/
+            await mediaCapture.VideoDeviceController.ExposureCompensationControl.SetValueAsync((float)0);
+            images.Add(await SaveImage());
+            
+            /*results = await SaveImageGetPixels();
+            byte[] thirdImage = results.Item1;*/
+            await mediaCapture.VideoDeviceController.ExposureCompensationControl.SetValueAsync(EV);
+            images.Add(await SaveImage());
 
             await mediaCapture.VideoDeviceController.ExposureCompensationControl.SetValueAsync(0);
-            byte[] secondImage = await SaveImageGetPixels();
 
-            await mediaCapture.VideoDeviceController.ExposureCompensationControl.SetValueAsync(mediaCapture.VideoDeviceController.ExposureCompensationControl.Max);
-            byte[] thirdImage = await SaveImageGetPixels();
-
-            await mediaCapture.VideoDeviceController.ExposureCompensationControl.SetValueAsync(0);
-
-            PerformHDR(firstImage, secondImage, thirdImage);
+            images = await AlignImages(images);
+            //PerformHDR(firstImage, secondImage, height, width);
 		}
 
         private async Task<Byte[]> SaveImageGetPixels()
@@ -171,7 +193,13 @@ namespace HDR
 
             memStream.Seek(0);
             var pixelDecoder = await BitmapDecoder.CreateAsync(memStream);
-            var pixelDataProvider = await pixelDecoder.GetPixelDataAsync();
+            var pixelDataProvider = await pixelDecoder.GetPixelDataAsync(
+                BitmapPixelFormat.Rgba8, 
+                BitmapAlphaMode.Premultiplied, 
+                new BitmapTransform(), 
+                ExifOrientationMode.RespectExifOrientation, 
+                ColorManagementMode.DoNotColorManage
+                );
             byte[] pixels = pixelDataProvider.DetachPixelData();
 
             fileStream.Dispose();
@@ -180,9 +208,129 @@ namespace HDR
             return pixels;
         }
 
-        private void PerformHDR(byte[] firstImage, byte[] secondImage, byte[] thirdImage)
+        private async Task<StreamImageSource> SaveImage()
         {
-            //MathNet.Numerics.LinearAlgebra.Factorization.sv
+            var photoStorageFile = await KnownFolders.CameraRoll.CreateFileAsync("photo.jpg", CreationCollisionOption.GenerateUniqueName);
+            var fileStream = await photoStorageFile.OpenAsync(Windows.Storage.FileAccessMode.ReadWrite);
+            var imageStream = new InMemoryRandomAccessStream();
+            await mediaCapture.CapturePhotoToStreamAsync(imageEncoding, imageStream);
+
+            imageStream.Seek(0);
+            var rotateDecoder = await BitmapDecoder.CreateAsync(imageStream);
+
+            var memStream = new InMemoryRandomAccessStream();
+            var encoder = await BitmapEncoder.CreateForTranscodingAsync(memStream, rotateDecoder);
+
+            encoder.BitmapTransform.Rotation = BitmapRotation.Clockwise90Degrees;
+
+            try
+            {
+                await encoder.FlushAsync();
+            }
+            catch (Exception err)
+            {
+                switch (err.HResult)
+                {
+                    case unchecked((int)0x88982F81): //WINCODEC_ERR_UNSUPPORTEDOPERATION
+                        // If the encoder does not support writing a thumbnail, then try again
+                        // but disable thumbnail generation.
+                        encoder.IsThumbnailGenerated = false;
+                        break;
+                    default:
+                        throw err;
+                }
+            }
+
+            memStream.Seek(0);
+            fileStream.Seek(0);
+            fileStream.Size = 0;
+            await RandomAccessStream.CopyAsync(memStream, fileStream);
+
+            imageStream.Dispose();
+            memStream.Dispose();
+
+            fileStream.Seek(0);
+            var stream = new InMemoryRandomAccessStream();
+            stream.Seek(0);
+            await RandomAccessStream.CopyAsync(fileStream, stream);
+            fileStream.Dispose();
+
+            stream.Seek(0);
+            return (new StreamImageSource(stream.AsStream()));
         }
+
+        private async void PerformHDR(byte[] firstImage, byte[] secondImage, uint height, uint width)
+        {
+
+        }
+
+        private async Task<List<IImageProvider>> AlignImages(List<IImageProvider> unalignedImages)
+        {
+            List<IImageProvider> alignedImages = new List<IImageProvider>();
+            InvalidOperationException ioe = null;
+            int count = 0;
+            bool failed = false;
+
+            try
+            {
+                using (var aligner = new ImageAligner())
+                {
+                    aligner.Sources = unalignedImages;
+                    aligner.ReferenceSource = unalignedImages[0];
+
+                    var alignedSources = await aligner.AlignAsync();
+
+                    foreach (var alignedSource in alignedSources)
+                    {
+                        if (alignedSource != null)
+                        {
+                            var photoStorageFile = await KnownFolders.CameraRoll.CreateFileAsync("photo.jpg", CreationCollisionOption.GenerateUniqueName);
+
+                            using (var fileStream = await photoStorageFile.OpenAsync(Windows.Storage.FileAccessMode.ReadWrite))
+                            using (var renderer = new JpegRenderer())
+                            {
+                                renderer.Source = alignedSource;
+                                IBuffer alignedBuffer = await renderer.RenderAsync();
+                                await fileStream.WriteAsync(alignedBuffer);
+                                await fileStream.FlushAsync();
+                            }
+
+                            alignedImages.Add(new StorageFileImageSource(photoStorageFile));
+                            count++;
+                        }
+                    }
+
+                    if (count  < 3)
+                    {
+                        messageDialog = new MessageDialog("Image alignment failed. Your HDR might not be well-aligned.");
+                        await messageDialog.ShowAsync();
+                        failed = true;
+                    }
+                    else
+                    {
+                        messageDialog = new MessageDialog("Image alignment complete");
+                        await messageDialog.ShowAsync();
+                    }
+                }
+            }
+            catch (InvalidOperationException e)
+            {
+                ioe = e;
+            }
+            if (ioe != null)
+            {
+                messageDialog = new MessageDialog("Image alignment failed. Your HDR might not be well-aligned.");
+                await messageDialog.ShowAsync();
+                failed = true;
+            }
+
+            if (failed)
+            {
+                return unalignedImages;
+            }
+            else
+                return alignedImages;
+        }
+
 	}
 }

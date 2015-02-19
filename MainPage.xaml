@@ -16,7 +16,9 @@
                 <RowDefinition Height="Auto"></RowDefinition>
                 <RowDefinition Height="*"></RowDefinition>
             </Grid.RowDefinitions>
-            <Button Grid.Row="0" x:Name="captureButton" Content="capture" Click="captureButton_Click" HorizontalAlignment="Stretch" Margin="12,0"/>
+            <Button Grid.Row="0" x:Name="HDR_High" Content="HDR High" Click="HDR_High_Click" HorizontalAlignment="Stretch" Margin="12,0"/>
+            <Button Grid.Row="1" x:Name="HDR_Medium" Content="HDR Medium" HorizontalAlignment="Stretch" Margin="12,0" Click="HDR_Medium_Click"/>
+            <Button Grid.Row="2" x:Name="HDR_Low" Content="HDR Low" HorizontalAlignment="Stretch" Margin="12,0" Click="HDR_Low_Click"/>
         </Grid>
     </Grid>
 

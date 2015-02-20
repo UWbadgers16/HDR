@@ -127,9 +127,15 @@ namespace HDR
             CaptureImage((float)1);
         }
 
-        private void Auto_ISO_Click(object sender, RoutedEventArgs e)
+        private void ISO_Click(object sender, RoutedEventArgs e)
         {
-            autoISO = true;
+            Button b = (Button)sender;
+            if (!autoISO)
+                b.Content = "Auto ISO";
+            else
+                b.Content = "Min ISO";
+
+            autoISO = !autoISO;
         }
 
 		private async void CaptureImage(float EV)
@@ -138,6 +144,8 @@ namespace HDR
             await mediaCapture.VideoDeviceController.FocusControl.FocusAsync();
             if(!autoISO)
                 await mediaCapture.VideoDeviceController.IsoSpeedControl.SetValueAsync(mediaCapture.VideoDeviceController.IsoSpeedControl.Min);
+            else
+                await mediaCapture.VideoDeviceController.IsoSpeedControl.SetAutoAsync();
 
             await mediaCapture.VideoDeviceController.ExposureCompensationControl.SetValueAsync(-EV);
             var saveImageResults = await SaveImage();

@@ -228,11 +228,6 @@ namespace HDR
             return Tuple.Create(new StreamImageSource(stream.AsStream()), exposureTime, height, width);
         }
 
-        /*private async void PerformHDR(byte[] firstImage, byte[] secondImage, uint height, uint width)
-        {
-
-        }*/
-
         private async Task<List<IImageProvider>> AlignImages(List<IImageProvider> unalignedImages)
         {
             List<IImageProvider> alignedImages = new List<IImageProvider>();
@@ -330,6 +325,11 @@ namespace HDR
             }
 
             return pixelImages;
+        }
+
+        private async void PerformHDR(byte[] firstImage, byte[] secondImage, byte[] thirdImage)
+        {
+
         }
 	}
 }

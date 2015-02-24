@@ -25,6 +25,9 @@ using Windows.Graphics.Imaging;
 using Windows.UI.Xaml.Media.Imaging;
 using Lumia.Imaging.Transforms;
 using Lumia.Imaging;
+using MathNet.Numerics.LinearAlgebra.Factorization;
+using System.Diagnostics;
+using MathNet.Numerics.LinearAlgebra;
 
 // The Blank Page item template is documented at http://go.microsoft.com/fwlink/?LinkId=391641
 
@@ -177,6 +180,11 @@ namespace HDR
 
             List<byte[]> pixelImages = await GetPixels(alignedImages);
             alignedImages = null;
+
+            firstExposureTime = 0.25;
+            secondExposureTime = 0.5;
+            thirdExposureTime = 0.75;
+            PerformHDR(pixelImages);
 		}
 
         private async Task<Tuple<StreamImageSource, double, int, int>> SaveImage()
@@ -285,6 +293,7 @@ namespace HDR
                 failed = true;
             }
 
+            failed = true;
             if (failed)
             {
                 alignedImages = null;
@@ -335,9 +344,131 @@ namespace HDR
             return pixelImages;
         }
 
-        private async void PerformHDR(byte[] firstImage, byte[] secondImage, byte[] thirdImage)
+        private async void PerformHDR(List<byte[]> images)
         {
+            List<int[]> samples = Sample(images[1]);
 
+            Matrix<double> A = Matrix<double>.Build.Dense(samples[0].Length * images.Count + 256 + 1, 256 + samples[0].Length, 0);
+            Vector<double> b = Vector<double>.Build.Dense(A.RowCount, 0);
+            double lambda = 10;
+            double weight = 0;
+            int[] sample = samples[0];
+            byte[] image = null;
+            UInt16 value = 0;
+            int k = 0;
+
+            for (int i = 0; i < sample.Length; i++)
+            {
+                for (int j = 0; j < images.Count; j++)
+                {
+                    image = images[j];
+                    value = Convert.ToUInt16(image[sample[i] * 4]);
+
+                    weight = GetWeight(value);
+                    A[k, value] = weight;
+                    A[k, 256 + i] = -weight;
+                    b[k] = weight * GetExposureTime(j);
+                    k++;
+                }
+            }
+
+            A[k, 128] = 1;
+            k++;
+
+            for (int i = 1; i <= 254; i++)
+            {
+                weight = GetWeight(Convert.ToUInt16(i));
+                A[k, i - 1] = lambda * weight;
+                A[k, i] = -2 * lambda * weight;
+                A[k, i + 1] = lambda * weight;
+                k++;
+            }
+
+            Stopwatch time = new Stopwatch();
+            time.Start();
+            Svd<double> svd = A.Svd(true);
+            time.Stop();
+
+            messageDialog = new MessageDialog(time.Elapsed.TotalSeconds.ToString());
+            await messageDialog.ShowAsync();
+
+            Vector<double> x = svd.Solve(b);
+            Vector<double> g = x.SubVector(0, 256);
+            Vector<double> lE = x.SubVector(256, x.Count - 256);
+        }
+
+        private List<int[]> Sample(byte[] image)
+        {
+            List<int[]> samples = new List<int[]>();
+            int[] blueSamples = new int[128];
+            int[] greenSamples = new int[128];
+            int[] redSamples = new int[128];
+
+            int range = image.Length / 4;
+            Random rand = new Random();
+            int sample = 0;
+
+            for (int i = 0; i < 128; i++)
+            {
+                sample = rand.Next(range);
+
+                while (Convert.ToUInt16(image[sample * 4]) < 5 || Convert.ToUInt16(image[sample * 4]) > 250)
+                {
+                    sample = rand.Next(range); 
+                }
+
+                blueSamples[i] = sample;
+            }
+
+            for (int i = 0; i < 128; i++)
+            {
+                sample = rand.Next(range);
+
+                while (Convert.ToUInt16(image[(sample * 4) + 1]) < 5 || Convert.ToUInt16(image[(sample * 4) + 1]) > 250)
+                {
+                    sample = rand.Next(range);
+                }
+
+                greenSamples[i] = sample;
+            }
+
+            for (int i = 0; i < 128; i++)
+            {
+                sample = rand.Next(range);
+
+                while (Convert.ToUInt16(image[(sample * 4) + 2]) < 5 || Convert.ToUInt16(image[(sample * 4) + 2]) > 250)
+                {
+                    sample = rand.Next(range);
+                }
+
+                redSamples[i] = sample;
+            }
+
+            samples.Add(blueSamples);
+            samples.Add(greenSamples);
+            samples.Add(redSamples);
+
+            return samples;
+        }
+
+        private double GetWeight(UInt16 value)
+        {
+           return ((Convert.ToDouble(value) <= 127) ? Convert.ToDouble(value) : (255 - Convert.ToDouble(value)));
+        }
+
+        private double GetExposureTime(int image)
+        {
+            switch(image)
+            {
+                case 0:
+                    return (Math.Log(firstExposureTime));
+                case 1:
+                    return (Math.Log(secondExposureTime));
+                case 2:
+                    return (Math.Log(thirdExposureTime));
+                default:
+                    return 0;
+            }
         }
 	}
 }

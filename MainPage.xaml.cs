@@ -45,9 +45,9 @@ namespace HDR
         private MessageDialog messageDialog;
         private FocusSettings focusSettings;
         private double firstExposureTime, secondExposureTime, thirdExposureTime, fourthExposureTime, fifthExposureTime;
-        //private int firstImageHeight, firstImageWidth, secondImageHeight, secondImageWidth, thirdImageHeight, thirdImageWidth, fourthImageHeight, fourthImageWidth, fifthImageHeight, fifthImageWidth;
         private int bufferSize;
         private bool autoISO = false;
+        private int imageCount = 0;
 
 		public MainPage()
 		{
@@ -152,52 +152,40 @@ namespace HDR
             else
                 await mediaCapture.VideoDeviceController.IsoSpeedControl.SetAutoAsync();
 
-            await mediaCapture.VideoDeviceController.ExposureCompensationControl.SetValueAsync(-2);
+            await mediaCapture.VideoDeviceController.ExposureCompensationControl.SetValueAsync(mediaCapture.VideoDeviceController.ExposureCompensationControl.Min);
             var saveImageResults = await SaveImage();
             images.Add(saveImageResults.Item1);
             firstExposureTime = saveImageResults.Item2;
-            /*firstImageHeight = saveImageResults.Item3;
-            firstImageWidth = saveImageResults.Item4;*/
 
-            await mediaCapture.VideoDeviceController.ExposureCompensationControl.SetValueAsync(-1);
+            await mediaCapture.VideoDeviceController.ExposureCompensationControl.SetValueAsync(mediaCapture.VideoDeviceController.ExposureCompensationControl.Min / 2);
             saveImageResults = await SaveImage();
             images.Add(saveImageResults.Item1);
             secondExposureTime = saveImageResults.Item2;
-            /*secondImageHeight = saveImageResults.Item3;
-            secondImageWidth = saveImageResults.Item4;*/
 
             await mediaCapture.VideoDeviceController.ExposureCompensationControl.SetValueAsync(0);
             saveImageResults = await SaveImage();
             images.Add(saveImageResults.Item1);
             thirdExposureTime = saveImageResults.Item2;
-            /*thirdImageHeight = saveImageResults.Item3;
-            thirdImageWidth = saveImageResults.Item4;*/
 
-            await mediaCapture.VideoDeviceController.ExposureCompensationControl.SetValueAsync(1);
+            await mediaCapture.VideoDeviceController.ExposureCompensationControl.SetValueAsync(mediaCapture.VideoDeviceController.ExposureCompensationControl.Max / 2);
             saveImageResults = await SaveImage();
             images.Add(saveImageResults.Item1);
             fourthExposureTime = saveImageResults.Item2;
-            /*fourthImageHeight = saveImageResults.Item3;
-            fourthImageWidth = saveImageResults.Item4;*/
 
-            await mediaCapture.VideoDeviceController.ExposureCompensationControl.SetValueAsync(2);
+            await mediaCapture.VideoDeviceController.ExposureCompensationControl.SetValueAsync(mediaCapture.VideoDeviceController.ExposureCompensationControl.Max);
             saveImageResults = await SaveImage();
             images.Add(saveImageResults.Item1);
             fifthExposureTime = saveImageResults.Item2;
-            /*fifthImageHeight = saveImageResults.Item3;
-            fifthImageWidth = saveImageResults.Item4;*/
 
             saveImageResults = null;
+            imageCount = images.Count;
 
             await mediaCapture.VideoDeviceController.ExposureCompensationControl.SetValueAsync(0);
 
             List<IImageProvider> alignedImages = await AlignImages(images);
             images = null;
 
-
-            //List<byte[]> pixelImages = await GetPixels(alignedImages);
-
-            for (int i = 0; i < 5; i++)
+            for (int i = 0; i < imageCount; i++)
             {
                 await WriteDataToFileAsync(i, await GetPixels(alignedImages[0]));
                 alignedImages.RemoveAt(0);
@@ -209,7 +197,7 @@ namespace HDR
 
 
             List<byte[]> pixelImages = new List<byte[]>();
-            for (int i = 0; i < 5; i++)
+            for (int i = 0; i < imageCount; i++)
             {
                 pixelImages.Add(await ReadFileContentsAsync(i.ToString()));
             }
@@ -221,8 +209,6 @@ namespace HDR
 
             messageDialog = new MessageDialog(time.Elapsed.TotalSeconds.ToString());
             await messageDialog.ShowAsync();
-
-            
 		}
 
         private async Task WriteDataToFileAsync(int image, byte[] data)
@@ -262,7 +248,7 @@ namespace HDR
             }
         }
 
-        private async Task<Tuple<StreamImageSource, double, int, int>> SaveImage()
+        private async Task<Tuple<StreamImageSource, double>> SaveImage()
         {
             var photoStorageFile = await KnownFolders.CameraRoll.CreateFileAsync("photo.jpg", CreationCollisionOption.GenerateUniqueName);
             var fileStream = await photoStorageFile.OpenAsync(Windows.Storage.FileAccessMode.ReadWrite);
@@ -325,7 +311,7 @@ namespace HDR
             fileStream.Dispose();
 
             stream.Seek(0);
-            return Tuple.Create(new StreamImageSource(stream.AsStream()), exposureTime, height, width);
+            return Tuple.Create(new StreamImageSource(stream.AsStream()), exposureTime);
         }
 
         private async Task<List<IImageProvider>> AlignImages(List<IImageProvider> unalignedImages)
@@ -340,7 +326,7 @@ namespace HDR
                 using (var aligner = new ImageAligner())
                 {
                     aligner.Sources = unalignedImages;
-                    aligner.ReferenceSource = unalignedImages[unalignedImages.Count / 2];
+                    aligner.ReferenceSource = unalignedImages[imageCount/ 2];
 
                     var alignedSources = await aligner.AlignAsync();
 
@@ -353,7 +339,7 @@ namespace HDR
                         }
                     }
 
-                    if (count  < 5)
+                    if (count  < imageCount)
                     {
                         messageDialog = new MessageDialog("Image alignment failed. Your HDR might not be well-aligned.");
                         await messageDialog.ShowAsync();
@@ -386,23 +372,6 @@ namespace HDR
             {
                 unalignedImages = null;
                 return alignedImages;
-            }
-        }
-
-        private async void PrintPixels(List<byte[]> alignedSources)
-        {
-            foreach (var alignedSource in alignedSources)
-            {
-                if (alignedSource != null)
-                {
-                    var photoStorageFile = await KnownFolders.CameraRoll.CreateFileAsync("photo.jpg", CreationCollisionOption.GenerateUniqueName);
-
-                    using (var fileStream = await photoStorageFile.OpenAsync(Windows.Storage.FileAccessMode.ReadWrite))
-                    {
-                        await fileStream.WriteAsync(alignedSource.AsBuffer());
-                        await fileStream.FlushAsync();
-                    }
-                }
             }
         }
 
@@ -450,7 +419,7 @@ namespace HDR
         private List<Vector<double>> PerformHDR(List<byte[]> images)
         {
             List<Vector<double>> x_values = new List<Vector<double>>();
-            int[] samples = Sample(images[images.Count / 2]);
+            int[] samples = Sample(images[imageCount/ 2]);
 
             Matrix<double> A_blue= Matrix<double>.Build.Dense(samples.Length * images.Count + 256 + 1, 256 + samples.Length, 0);
             Vector<double> b_blue = Vector<double>.Build.Dense(A_blue.RowCount, 0);
@@ -459,7 +428,7 @@ namespace HDR
             Matrix<double> A_red = Matrix<double>.Build.Dense(samples.Length * images.Count + 256 + 1, 256 + samples.Length, 0);
             Vector<double> b_red = Vector<double>.Build.Dense(A_red.RowCount, 0);
 
-            double lambda = 100;
+            double lambda = 200;
             double weight = 0;
             byte[] image = null;
             UInt16 value = 0;
@@ -467,7 +436,7 @@ namespace HDR
 
             for (int i = 0; i < samples.Length; i++)
             {
-                for (int j = 0; j < images.Count; j++)
+                for (int j = 0; j < imageCount; j++)
                 {
                     image = images[j];
 

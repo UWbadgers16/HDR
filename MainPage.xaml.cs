@@ -28,6 +28,8 @@ using Lumia.Imaging;
 using MathNet.Numerics.LinearAlgebra.Factorization;
 using System.Diagnostics;
 using MathNet.Numerics.LinearAlgebra;
+using ExifLib;
+using ImageMagick;
 
 // The Blank Page item template is documented at http://go.microsoft.com/fwlink/?LinkId=391641
 
@@ -43,8 +45,9 @@ namespace HDR
         private DeviceInformation deviceInformation;
         private MessageDialog messageDialog;
         private FocusSettings focusSettings;
-        private double firstExposureTime, secondExposureTime, thirdExposureTime;
-        private int firstImageHeight, firstImageWidth, secondImageHeight, secondImageWidth, thirdImageHeight, thirdImageWidth;
+        private double firstExposureTime, secondExposureTime, thirdExposureTime, fourthExposureTime, fifthExposureTime;
+        //private int firstImageHeight, firstImageWidth, secondImageHeight, secondImageWidth, thirdImageHeight, thirdImageWidth, fourthImageHeight, fourthImageWidth, fifthImageHeight, fifthImageWidth;
+        private int bufferSize;
         private bool autoISO = false;
 
 		public MainPage()
@@ -150,26 +153,40 @@ namespace HDR
             else
                 await mediaCapture.VideoDeviceController.IsoSpeedControl.SetAutoAsync();
 
-            await mediaCapture.VideoDeviceController.ExposureCompensationControl.SetValueAsync(-EV);
+            await mediaCapture.VideoDeviceController.ExposureCompensationControl.SetValueAsync(-2);
             var saveImageResults = await SaveImage();
             images.Add(saveImageResults.Item1);
             firstExposureTime = saveImageResults.Item2;
-            firstImageHeight = saveImageResults.Item3;
-            firstImageWidth = saveImageResults.Item4;
+            /*firstImageHeight = saveImageResults.Item3;
+            firstImageWidth = saveImageResults.Item4;*/
 
-            await mediaCapture.VideoDeviceController.ExposureCompensationControl.SetValueAsync((float)0);
+            await mediaCapture.VideoDeviceController.ExposureCompensationControl.SetValueAsync(-1);
             saveImageResults = await SaveImage();
             images.Add(saveImageResults.Item1);
             secondExposureTime = saveImageResults.Item2;
-            secondImageHeight = saveImageResults.Item3;
-            secondImageWidth = saveImageResults.Item4;
+            /*secondImageHeight = saveImageResults.Item3;
+            secondImageWidth = saveImageResults.Item4;*/
 
-            await mediaCapture.VideoDeviceController.ExposureCompensationControl.SetValueAsync(EV);
+            await mediaCapture.VideoDeviceController.ExposureCompensationControl.SetValueAsync(0);
             saveImageResults = await SaveImage();
             images.Add(saveImageResults.Item1);
             thirdExposureTime = saveImageResults.Item2;
-            thirdImageHeight = saveImageResults.Item3;
-            thirdImageWidth = saveImageResults.Item4;
+            /*thirdImageHeight = saveImageResults.Item3;
+            thirdImageWidth = saveImageResults.Item4;*/
+
+            await mediaCapture.VideoDeviceController.ExposureCompensationControl.SetValueAsync(1);
+            saveImageResults = await SaveImage();
+            images.Add(saveImageResults.Item1);
+            fourthExposureTime = saveImageResults.Item2;
+            /*fourthImageHeight = saveImageResults.Item3;
+            fourthImageWidth = saveImageResults.Item4;*/
+
+            await mediaCapture.VideoDeviceController.ExposureCompensationControl.SetValueAsync(2);
+            saveImageResults = await SaveImage();
+            images.Add(saveImageResults.Item1);
+            fifthExposureTime = saveImageResults.Item2;
+            /*fifthImageHeight = saveImageResults.Item3;
+            fifthImageWidth = saveImageResults.Item4;*/
 
             saveImageResults = null;
 
@@ -178,14 +195,71 @@ namespace HDR
             List<IImageProvider> alignedImages = await AlignImages(images);
             images = null;
 
-            List<byte[]> pixelImages = await GetPixels(alignedImages);
+
+            //List<byte[]> pixelImages = await GetPixels(alignedImages);
+
+            for (int i = 0; i < 5; i++)
+            {
+                await WriteDataToFileAsync(i, await GetPixels(alignedImages[0]));
+                alignedImages.RemoveAt(0);
+            }
             alignedImages = null;
 
-            firstExposureTime = 0.25;
-            secondExposureTime = 0.5;
-            thirdExposureTime = 0.75;
-            PerformHDR(pixelImages);
+            messageDialog = new MessageDialog("Pixelated images saved to internal storage");
+            await messageDialog.ShowAsync();
+
+
+            List<byte[]> pixelImages = new List<byte[]>();
+            for (int i = 0; i < 5; i++)
+            {
+                pixelImages.Add(await ReadFileContentsAsync(i.ToString()));
+            }
+
+            Stopwatch time = new Stopwatch();
+            time.Start();
+            List<Vector<double>> x_values = await PerformHDR(pixelImages);
+            time.Stop();
+
+            messageDialog = new MessageDialog(time.Elapsed.TotalSeconds.ToString());
+            await messageDialog.ShowAsync();
 		}
+
+        private async Task WriteDataToFileAsync(int image, byte[] data)
+        {
+            var folder = ApplicationData.Current.LocalFolder;
+
+            var file = await folder.CreateFileAsync(image.ToString(), CreationCollisionOption.ReplaceExisting);
+
+            using (var s = await file.OpenStreamForWriteAsync())
+            {
+                await s.WriteAsync(data, 0, data.Length);
+            }
+
+            bufferSize = data.Length;
+            data = null;
+            file = null;
+            folder = null;
+        }
+
+        public async Task<byte[]> ReadFileContentsAsync(string fileName)
+        {
+            var folder = ApplicationData.Current.LocalFolder;
+
+            try
+            {
+                using (var file = await folder.OpenStreamForReadAsync(fileName))
+                {
+                    byte[] data = new byte[bufferSize];
+                    await file.ReadAsync(data, 0, bufferSize);
+
+                    return data;
+                }
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
 
         private async Task<Tuple<StreamImageSource, double, int, int>> SaveImage()
         {
@@ -234,12 +308,21 @@ namespace HDR
             await RandomAccessStream.CopyAsync(fileStream, stream);
 
             fileStream.Seek(0);
-            ExifLib.JpegInfo info = ExifLib.ExifReader.ReadJpeg(fileStream.AsStream(), photoStorageFile.Name);
-            double exposureTime = info.ExposureTime;
-            int height = info.Height;
-            int width = info.Width;
+
+            double exposureTime;
+            int height;
+            int width;
+            using (ExifReader reader = new ExifLib.ExifReader(fileStream.AsStream()))
+            {
+                reader.GetTagValue<double>(ExifTags.ExposureTime, out exposureTime);
+                reader.GetTagValue<int>(ExifTags.ImageLength, out height);
+                reader.GetTagValue<int>(ExifTags.ImageWidth, out width);
+            }
+
+            /*ExifLib.JpegInfo info = ExifLib.ExifReader.ReadJpeg(fileStream.AsStream(), photoStorageFile.Name);
+            double exposureTime = info.ExposureTime;*/
             fileStream.Dispose();
-            
+
             stream.Seek(0);
             return Tuple.Create(new StreamImageSource(stream.AsStream()), exposureTime, height, width);
         }
@@ -256,7 +339,7 @@ namespace HDR
                 using (var aligner = new ImageAligner())
                 {
                     aligner.Sources = unalignedImages;
-                    aligner.ReferenceSource = unalignedImages[0];
+                    aligner.ReferenceSource = unalignedImages[unalignedImages.Count / 2];
 
                     var alignedSources = await aligner.AlignAsync();
 
@@ -269,7 +352,7 @@ namespace HDR
                         }
                     }
 
-                    if (count  < 3)
+                    if (count  < 5)
                     {
                         messageDialog = new MessageDialog("Image alignment failed. Your HDR might not be well-aligned.");
                         await messageDialog.ShowAsync();
@@ -293,7 +376,6 @@ namespace HDR
                 failed = true;
             }
 
-            failed = true;
             if (failed)
             {
                 alignedImages = null;
@@ -323,7 +405,7 @@ namespace HDR
             }
         }
 
-        private async Task<List<byte[]>> GetPixels(List<IImageProvider> alignedSources)
+        /*private async Task<List<byte[]>> GetPixels(List<IImageProvider> alignedSources)
         {
             List<byte[]> pixelImages = new List<byte[]>();
 
@@ -341,60 +423,90 @@ namespace HDR
                 }
             }
 
+            alignedSources = null;
             return pixelImages;
+        }*/
+
+        private async Task<byte[]> GetPixels(IImageProvider alignedSource)
+        {
+            byte[] pixels = null;
+
+            if (alignedSource != null)
+            {
+                using (var renderer = new BitmapRenderer())
+                {
+                    renderer.Source = alignedSource;
+                    Bitmap alignedBuffer = await renderer.RenderAsync();
+
+                    pixels = alignedBuffer.Buffers[0].Buffer.ToArray();
+                }
+            }
+
+            alignedSource = null;
+            return pixels;
         }
 
-        private async void PerformHDR(List<byte[]> images)
+        private async Task<List<Vector<double>>> PerformHDR(List<byte[]> images)
         {
-            List<int[]> samples = Sample(images[1]);
+            List<Vector<double>> x_values = new List<Vector<double>>();
+            List<int[]> samples = Sample(images[images.Count / 2]);
 
             Matrix<double> A = Matrix<double>.Build.Dense(samples[0].Length * images.Count + 256 + 1, 256 + samples[0].Length, 0);
             Vector<double> b = Vector<double>.Build.Dense(A.RowCount, 0);
-            double lambda = 10;
+            double lambda = 100;
             double weight = 0;
-            int[] sample = samples[0];
+            int[] sample = null;
             byte[] image = null;
             UInt16 value = 0;
             int k = 0;
 
-            for (int i = 0; i < sample.Length; i++)
+            for (int x = 0; x < samples.Count; x++)
             {
-                for (int j = 0; j < images.Count; j++)
-                {
-                    image = images[j];
-                    value = Convert.ToUInt16(image[sample[i] * 4]);
+                sample = samples[x];
 
-                    weight = GetWeight(value);
-                    A[k, value] = weight;
-                    A[k, 256 + i] = -weight;
-                    b[k] = weight * GetExposureTime(j);
+                for (int i = 0; i < sample.Length; i++)
+                {
+                    for (int j = 0; j < images.Count; j++)
+                    {
+                        image = images[j];
+                        value = Convert.ToUInt16(image[sample[i] * 4]);
+
+                        weight = GetWeight(value);
+                        A[k, value] = weight;
+                        A[k, 256 + i] = -weight;
+                        b[k] = weight * GetExposureTime(j);
+                        k++;
+                    }
+                }
+
+                A[k, 128] = 1;
+                k++;
+
+                for (int i = 1; i <= 254; i++)
+                {
+                    weight = GetWeight(Convert.ToUInt16(i));
+                    A[k, i - 1] = lambda * weight;
+                    A[k, i] = -2 * lambda * weight;
+                    A[k, i + 1] = lambda * weight;
                     k++;
                 }
+
+                Svd<double> svd = A.Svd(true);
+                x_values.Add(svd.Solve(b));
+
+                A.Clear();
+                b.Clear();
+                k = 0;
             }
 
-            A[k, 128] = 1;
-            k++;
+            A = null;
+            b = null;
+            samples = null;
+            sample = null;
+            image = null;
+            images = null;
 
-            for (int i = 1; i <= 254; i++)
-            {
-                weight = GetWeight(Convert.ToUInt16(i));
-                A[k, i - 1] = lambda * weight;
-                A[k, i] = -2 * lambda * weight;
-                A[k, i + 1] = lambda * weight;
-                k++;
-            }
-
-            Stopwatch time = new Stopwatch();
-            time.Start();
-            Svd<double> svd = A.Svd(true);
-            time.Stop();
-
-            messageDialog = new MessageDialog(time.Elapsed.TotalSeconds.ToString());
-            await messageDialog.ShowAsync();
-
-            Vector<double> x = svd.Solve(b);
-            Vector<double> g = x.SubVector(0, 256);
-            Vector<double> lE = x.SubVector(256, x.Count - 256);
+            return x_values;
         }
 
         private List<int[]> Sample(byte[] image)
@@ -408,7 +520,7 @@ namespace HDR
             Random rand = new Random();
             int sample = 0;
 
-            for (int i = 0; i < 128; i++)
+            for (int i = 0; i < blueSamples.Length; i++)
             {
                 sample = rand.Next(range);
 
@@ -420,7 +532,7 @@ namespace HDR
                 blueSamples[i] = sample;
             }
 
-            for (int i = 0; i < 128; i++)
+            for (int i = 0; i < greenSamples.Length; i++)
             {
                 sample = rand.Next(range);
 
@@ -432,7 +544,7 @@ namespace HDR
                 greenSamples[i] = sample;
             }
 
-            for (int i = 0; i < 128; i++)
+            for (int i = 0; i < redSamples.Length; i++)
             {
                 sample = rand.Next(range);
 

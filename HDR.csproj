@@ -116,7 +116,7 @@
   <ItemGroup>
     <Reference Include="ExifLib, Version=1.6.3.0, Culture=neutral, PublicKeyToken=30284005913968db, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\packages\ExifLib.dll</HintPath>
+      <HintPath>..\packages\ExifLib.1.6.3.0\lib\portable-win81+wpa81\ExifLib.dll</HintPath>
     </Reference>
     <Reference Include="MathNet.Numerics">
       <HintPath>..\packages\MathNet.Numerics.3.5.0\lib\portable-net45+netcore45+wpa81+wp8+MonoAndroid1+MonoTouch1\MathNet.Numerics.dll</HintPath>

@@ -29,7 +29,6 @@ using MathNet.Numerics.LinearAlgebra.Factorization;
 using System.Diagnostics;
 using MathNet.Numerics.LinearAlgebra;
 using ExifLib;
-using ImageMagick;
 
 // The Blank Page item template is documented at http://go.microsoft.com/fwlink/?LinkId=391641
 
@@ -217,11 +216,13 @@ namespace HDR
 
             Stopwatch time = new Stopwatch();
             time.Start();
-            List<Vector<double>> x_values = await PerformHDR(pixelImages);
+            List<Vector<double>> x_values = PerformHDR(pixelImages);
             time.Stop();
 
             messageDialog = new MessageDialog(time.Elapsed.TotalSeconds.ToString());
             await messageDialog.ShowAsync();
+
+            
 		}
 
         private async Task WriteDataToFileAsync(int image, byte[] data)
@@ -446,70 +447,122 @@ namespace HDR
             return pixels;
         }
 
-        private async Task<List<Vector<double>>> PerformHDR(List<byte[]> images)
+        private List<Vector<double>> PerformHDR(List<byte[]> images)
         {
             List<Vector<double>> x_values = new List<Vector<double>>();
-            List<int[]> samples = Sample(images[images.Count / 2]);
+            int[] samples = Sample(images[images.Count / 2]);
 
-            Matrix<double> A = Matrix<double>.Build.Dense(samples[0].Length * images.Count + 256 + 1, 256 + samples[0].Length, 0);
-            Vector<double> b = Vector<double>.Build.Dense(A.RowCount, 0);
+            Matrix<double> A_blue= Matrix<double>.Build.Dense(samples.Length * images.Count + 256 + 1, 256 + samples.Length, 0);
+            Vector<double> b_blue = Vector<double>.Build.Dense(A_blue.RowCount, 0);
+            Matrix<double> A_green = Matrix<double>.Build.Dense(samples.Length * images.Count + 256 + 1, 256 + samples.Length, 0);
+            Vector<double> b_green = Vector<double>.Build.Dense(A_green.RowCount, 0);
+            Matrix<double> A_red = Matrix<double>.Build.Dense(samples.Length * images.Count + 256 + 1, 256 + samples.Length, 0);
+            Vector<double> b_red = Vector<double>.Build.Dense(A_red.RowCount, 0);
+
             double lambda = 100;
             double weight = 0;
-            int[] sample = null;
             byte[] image = null;
             UInt16 value = 0;
             int k = 0;
 
-            for (int x = 0; x < samples.Count; x++)
+            for (int i = 0; i < samples.Length; i++)
             {
-                sample = samples[x];
-
-                for (int i = 0; i < sample.Length; i++)
+                for (int j = 0; j < images.Count; j++)
                 {
-                    for (int j = 0; j < images.Count; j++)
-                    {
-                        image = images[j];
-                        value = Convert.ToUInt16(image[sample[i] * 4]);
+                    image = images[j];
 
-                        weight = GetWeight(value);
-                        A[k, value] = weight;
-                        A[k, 256 + i] = -weight;
-                        b[k] = weight * GetExposureTime(j);
-                        k++;
-                    }
-                }
+                    value = Convert.ToUInt16(image[samples[i] * 4 ]);
+                    weight = GetWeight(value);
+                    A_blue[k, value] = weight;
+                    A_blue[k, 256 + i] = -weight;
+                    b_blue[k] = weight * GetExposureTime(j);
 
-                A[k, 128] = 1;
-                k++;
+                    value = Convert.ToUInt16(image[samples[i] * 4 + 1]);
+                    weight = GetWeight(value);
+                    A_green[k, value] = weight;
+                    A_green[k, 256 + i] = -weight;
+                    b_green[k] = weight * GetExposureTime(j);
 
-                for (int i = 1; i <= 254; i++)
-                {
-                    weight = GetWeight(Convert.ToUInt16(i));
-                    A[k, i - 1] = lambda * weight;
-                    A[k, i] = -2 * lambda * weight;
-                    A[k, i + 1] = lambda * weight;
+                    value = Convert.ToUInt16(image[samples[i] * 4 + 2]);
+                    weight = GetWeight(value);
+                    A_red[k, value] = weight;
+                    A_red[k, 256 + i] = -weight;
+                    b_red[k] = weight * GetExposureTime(j);
+
                     k++;
                 }
-
-                Svd<double> svd = A.Svd(true);
-                x_values.Add(svd.Solve(b));
-
-                A.Clear();
-                b.Clear();
-                k = 0;
             }
 
-            A = null;
-            b = null;
+            A_blue[k, 128] = 1;
+            A_green[k, 128] = 1;
+            A_red[k, 128] = 1;
+            k++;
+
+            for (int i = 1; i <= 254; i++)
+            {
+                weight = GetWeight(Convert.ToUInt16(i));
+                A_blue[k, i - 1] = lambda * weight;
+                A_blue[k, i] = -2 * lambda * weight;
+                A_blue[k, i + 1] = lambda * weight;
+
+                A_green[k, i - 1] = lambda * weight;
+                A_green[k, i] = -2 * lambda * weight;
+                A_green[k, i + 1] = lambda * weight;
+
+                A_red[k, i - 1] = lambda * weight;
+                A_red[k, i] = -2 * lambda * weight;
+                A_red[k, i + 1] = lambda * weight;
+
+                k++;
+            }
+
+            Svd<double> svd = A_blue.Svd(true);
+            x_values.Add(svd.Solve(b_blue));
+
+            svd = A_green.Svd(true);
+            x_values.Add(svd.Solve(b_green));
+
+            svd = A_red.Svd(true);
+            x_values.Add(svd.Solve(b_red));
+
+            A_blue = null;
+            b_blue = null;
+            A_green = null;
+            b_green = null;
+            A_red = null;
+            b_red = null;
             samples = null;
-            sample = null;
             image = null;
             images = null;
 
             return x_values;
         }
 
-        private List<int[]> Sample(byte[] image)
+        private int[] Sample(byte[] image)
+        {
+            int[] samples = new int[128];
+
+            int range = image.Length / 4;
+            Random rand = new Random();
+            int sample = 0;
+
+            for (int i = 0; i < samples.Length; i++)
+            {
+                sample = rand.Next(range);
+
+                while (Convert.ToUInt16(image[sample * 4]) < 5 || Convert.ToUInt16(image[sample * 4]) > 250 || Convert.ToUInt16(image[sample * 4 + 1]) < 5 
+                    || Convert.ToUInt16(image[sample * 4 + 1]) > 250 || Convert.ToUInt16(image[sample * 4 + 2]) < 5 || Convert.ToUInt16(image[sample * 4 + 2]) > 250)
+                {
+                    sample = rand.Next(range);
+                }
+
+                samples[i] = sample;
+            }
+
+            return samples;
+        }
+
+        /*private List<int[]> Sample(byte[] image)
         {
             List<int[]> samples = new List<int[]>();
             int[] blueSamples = new int[128];
@@ -561,7 +614,7 @@ namespace HDR
             samples.Add(redSamples);
 
             return samples;
-        }
+        }*/
 
         private double GetWeight(UInt16 value)
         {

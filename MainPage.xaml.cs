@@ -206,7 +206,7 @@ namespace HDR
         private async void WriteHDRFile(byte[] radianceMap)
         {
             var folder = ApplicationData.Current.LocalFolder;
-            var file = await folder.CreateFileAsync("radiance_map.hdr", CreationCollisionOption.ReplaceExisting);
+            var file = await folder.CreateFileAsync(".hdr", CreationCollisionOption.GenerateUniqueName);
 
             using (IRandomAccessStream fileStream = await file.OpenAsync(FileAccessMode.ReadWrite))
             {
@@ -228,21 +228,6 @@ namespace HDR
                 }
             }
         }
-
-        /*private async void WriteHDRToFile()
-        {
-            var folder = ApplicationData.Current.LocalFolder;
-
-            var file = await folder.CreateFileAsync("radiance_map.hdr", CreationCollisionOption.ReplaceExisting);
-
-            using (StreamWriter s = new StreamWriter(await file.OpenStreamForWriteAsync()))
-            {
-                await s.WriteAsync("#?RADIANCE\n");
-                await s.WriteAsync("pvalue -s 15 -h -df -r +x 2448 +y 3264\n");
-                await s.WriteAsync("FORMAT=32-bit_rle_rgbe\n\n");
-                await s.WriteAsync("+X 2448 + Y3264\n");
-            }
-        }*/
 
         private async Task WriteDataToFileAsync(int image, byte[] data)
         {
@@ -538,92 +523,67 @@ namespace HDR
 
         private byte[] RadianceMap(List<byte[]> images, List<Vector<double>> g_values)
         {
-            //var folder = ApplicationData.Current.LocalFolder;
+            byte[] image = null;
+            double blueNumerator = 0;
+            double blueDenominator = 0;
+            double greenNumerator = 0;
+            double greenDenominator = 0;
+            double redNumerator = 0;
+            double redDenominator = 0;
+            double blueRadiance = 0;
+            double greenRadiance = 0;
+            double redRadiance = 0;
+            UInt16 value = 0;
+            double weight = 0;
+            Vector<double> g = null;
+            int range = images[0].Length / 4;
+            byte[] radianceMap = new byte[range * 4];
 
-            //var file = await folder.CreateFileAsync("radiance_map.hdr", CreationCollisionOption.ReplaceExisting);
-
-            //using (StreamWriter s = new StreamWriter(await file.OpenStreamForWriteAsync()))
-            //{
-
-                /*await s.WriteAsync("#?RADIANCE\n\n");
-                await s.WriteAsync("pvalue -s 15 -h -df -r -y " + height.ToString() + " +x " + width.ToString() + "\n");
-                await s.WriteAsync("FORMAT=32-bit_rle_rgbe\n\n");
-                await s.WriteAsync("-Y " + height.ToString() + " +X " + width.ToString() + "\n");*/
-
-                byte[] image = null;
-                double blueNumerator = 0;
-                double blueDenominator = 0;
-                double greenNumerator = 0;
-                double greenDenominator = 0;
-                double redNumerator = 0;
-                double redDenominator = 0;
-                double blueRadiance = 0;
-                double greenRadiance = 0;
-                double redRadiance = 0;
-                UInt16 value = 0;
-                double weight = 0;
-                Vector<double> g = null;
-                int range = images[0].Length / 4;
-                byte[] radianceMap = new byte[range * 4];
-
-                for (int i = 0; i < range; i++)
+            for (int i = 0; i < range; i++)
+            {
+                for (int j = 0; j < imageCount; j++)
                 {
-                    for (int j = 0; j < imageCount; j++)
-                    {
-                        image = images[j];
+                    image = images[j];
 
-                        value = Convert.ToUInt16(image[i * 4]);
-                        weight = GetWeight(value);
-                        g = g_values[0];
-                        blueNumerator += weight * (g[value] - GetExposureTime(j));
-                        blueDenominator += weight;
+                    value = Convert.ToUInt16(image[i * 4]);
+                    weight = GetWeight(value);
+                    g = g_values[0];
+                    blueNumerator += weight * (g[value] - GetExposureTime(j));
+                    blueDenominator += weight;
 
-                        value = Convert.ToUInt16(image[(i * 4) + 1]);
-                        weight = GetWeight(value);
-                        g = g_values[1];
-                        greenNumerator += weight * (g[value] - GetExposureTime(j));
-                        greenDenominator += weight;
+                    value = Convert.ToUInt16(image[(i * 4) + 1]);
+                    weight = GetWeight(value);
+                    g = g_values[1];
+                    greenNumerator += weight * (g[value] - GetExposureTime(j));
+                    greenDenominator += weight;
 
-                        value = Convert.ToUInt16(image[(i * 4) + 2]);
-                        weight = GetWeight(value);
-                        g = g_values[2];
-                        redNumerator += weight * (g[value] - GetExposureTime(j));
-                        redDenominator += weight;
-                    }
-
-                    blueRadiance = Math.Pow(Math.E, (blueNumerator / blueDenominator));
-                    greenRadiance = Math.Pow(Math.E, (greenNumerator / greenDenominator));
-                    redRadiance = Math.Pow(Math.E, (redNumerator / redDenominator));
-
-                    /*await s.WriteAsync(blueRadiance.ToString() + " ");
-                    await s.WriteAsync(greenRadiance.ToString() + " ");
-                    await s.WriteAsync(redRadiance.ToString() + " ");
-
-                    if(((i + 1) % width) == 0)
-                    {
-                        await s.WriteAsync("\n");
-                    }*/
-
-                    byte[] rgbe = new byte[4];
-                    GetRGBE(ref rgbe, blueRadiance, greenRadiance, redRadiance);
-                    radianceMap[i] = rgbe[0];
-                    radianceMap[i+1] = rgbe[1];
-                    radianceMap[i+2] = rgbe[2];
-                    radianceMap[i+3] = rgbe[3];
-
-                    //await s.WriteAsync(rgbe, 0, 4);
-
-                    blueNumerator = 0;
-                    blueDenominator = 0;
-                    greenNumerator = 0;
-                    greenDenominator = 0;
-                    redNumerator = 0;
-                    redDenominator = 0;
+                    value = Convert.ToUInt16(image[(i * 4) + 2]);
+                    weight = GetWeight(value);
+                    g = g_values[2];
+                    redNumerator += weight * (g[value] - GetExposureTime(j));
+                    redDenominator += weight;
                 }
 
-            //}
+                blueRadiance = Math.Pow(Math.E, (blueNumerator / blueDenominator));
+                greenRadiance = Math.Pow(Math.E, (greenNumerator / greenDenominator));
+                redRadiance = Math.Pow(Math.E, (redNumerator / redDenominator));
 
-                return radianceMap;
+                byte[] rgbe = new byte[4];
+                GetRGBE(ref rgbe, blueRadiance, greenRadiance, redRadiance);
+                radianceMap[i * 4] = rgbe[0];
+                radianceMap[i * 4 + 1] = rgbe[1];
+                radianceMap[i * 4 + 2] = rgbe[2];
+                radianceMap[i * 4 + 3] = rgbe[3];
+
+                blueNumerator = 0;
+                blueDenominator = 0;
+                greenNumerator = 0;
+                greenDenominator = 0;
+                redNumerator = 0;
+                redDenominator = 0;
+            }
+
+            return radianceMap;
         }
 
         private void GetRGBE(ref byte[] rgbe, double blue, double green, double red)

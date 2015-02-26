@@ -29,6 +29,8 @@ using MathNet.Numerics.LinearAlgebra.Factorization;
 using System.Diagnostics;
 using MathNet.Numerics.LinearAlgebra;
 using ExifLib;
+using WinRTXamlToolkit.Controls.DataVisualization.Charting;
+using System.Text;
 
 // The Blank Page item template is documented at http://go.microsoft.com/fwlink/?LinkId=391641
 
@@ -45,6 +47,7 @@ namespace HDR
         private MessageDialog messageDialog;
         private FocusSettings focusSettings;
         private double firstExposureTime, secondExposureTime, thirdExposureTime, fourthExposureTime, fifthExposureTime;
+        private UInt32 height, width;
         private int bufferSize;
         private bool autoISO = false;
         private int imageCount = 0;
@@ -182,15 +185,15 @@ namespace HDR
 
             await mediaCapture.VideoDeviceController.ExposureCompensationControl.SetValueAsync(0);
 
-            List<IImageProvider> alignedImages = await AlignImages(images);
-            images = null;
+            //List<IImageProvider> alignedImages = await AlignImages(images);
+            //images = null;
 
             for (int i = 0; i < imageCount; i++)
             {
-                await WriteDataToFileAsync(i, await GetPixels(alignedImages[0]));
-                alignedImages.RemoveAt(0);
+                await WriteDataToFileAsync(i, await GetPixels(images[0]));
+                images.RemoveAt(0);
             }
-            alignedImages = null;
+            images = null;
 
             messageDialog = new MessageDialog("Pixelated images saved to internal storage");
             await messageDialog.ShowAsync();
@@ -207,9 +210,36 @@ namespace HDR
             List<Vector<double>> x_values = PerformHDR(pixelImages);
             time.Stop();
 
-            messageDialog = new MessageDialog(time.Elapsed.TotalSeconds.ToString());
+            messageDialog = new MessageDialog("SVD solved in " + time.Elapsed.TotalSeconds.ToString() + " seconds");
             await messageDialog.ShowAsync();
+
+            List<Vector<double>> g_values = new List<Vector<double>>();
+            g_values.Add(x_values[0].SubVector(0,256));
+            g_values.Add(x_values[1].SubVector(0,256));
+            g_values.Add(x_values[2].SubVector(0,256));
+            x_values = null;
+
+            await RadianceMap(pixelImages, g_values);
+
+            messageDialog = new MessageDialog("Radiance map complete");
+            await messageDialog.ShowAsync();
+
 		}
+
+        /*private async void WriteHDRToFile()
+        {
+            var folder = ApplicationData.Current.LocalFolder;
+
+            var file = await folder.CreateFileAsync("radiance_map.hdr", CreationCollisionOption.ReplaceExisting);
+
+            using (StreamWriter s = new StreamWriter(await file.OpenStreamForWriteAsync()))
+            {
+                await s.WriteAsync("#?RADIANCE\n");
+                await s.WriteAsync("pvalue -s 15 -h -df -r +x 2448 +y 3264\n");
+                await s.WriteAsync("FORMAT=32-bit_rle_rgbe\n\n");
+                await s.WriteAsync("+X 2448 + Y3264\n");
+            }
+        }*/
 
         private async Task WriteDataToFileAsync(int image, byte[] data)
         {
@@ -297,17 +327,11 @@ namespace HDR
             fileStream.Seek(0);
 
             double exposureTime;
-            int height;
-            int width;
             using (ExifReader reader = new ExifLib.ExifReader(fileStream.AsStream()))
             {
                 reader.GetTagValue<double>(ExifTags.ExposureTime, out exposureTime);
-                reader.GetTagValue<int>(ExifTags.ImageLength, out height);
-                reader.GetTagValue<int>(ExifTags.ImageWidth, out width);
             }
 
-            /*ExifLib.JpegInfo info = ExifLib.ExifReader.ReadJpeg(fileStream.AsStream(), photoStorageFile.Name);
-            double exposureTime = info.ExposureTime;*/
             fileStream.Dispose();
 
             stream.Seek(0);
@@ -326,7 +350,7 @@ namespace HDR
                 using (var aligner = new ImageAligner())
                 {
                     aligner.Sources = unalignedImages;
-                    aligner.ReferenceSource = unalignedImages[imageCount/ 2];
+                    aligner.ReferenceSource = unalignedImages[imageCount / 2];
 
                     var alignedSources = await aligner.AlignAsync();
 
@@ -407,6 +431,8 @@ namespace HDR
                 {
                     renderer.Source = alignedSource;
                     Bitmap alignedBuffer = await renderer.RenderAsync();
+                    height = Convert.ToUInt32(alignedBuffer.Dimensions.Height);
+                    width = Convert.ToUInt32(alignedBuffer.Dimensions.Width);
 
                     pixels = alignedBuffer.Buffers[0].Buffer.ToArray();
                 }
@@ -428,7 +454,7 @@ namespace HDR
             Matrix<double> A_red = Matrix<double>.Build.Dense(samples.Length * images.Count + 256 + 1, 256 + samples.Length, 0);
             Vector<double> b_red = Vector<double>.Build.Dense(A_red.RowCount, 0);
 
-            double lambda = 200;
+            double lambda = 300;
             double weight = 0;
             byte[] image = null;
             UInt16 value = 0;
@@ -440,7 +466,7 @@ namespace HDR
                 {
                     image = images[j];
 
-                    value = Convert.ToUInt16(image[samples[i] * 4 ]);
+                    value = Convert.ToUInt16(image[samples[i] * 4]);
                     weight = GetWeight(value);
                     A_blue[k, value] = weight;
                     A_blue[k, 256 + i] = -weight;
@@ -505,6 +531,121 @@ namespace HDR
             images = null;
 
             return x_values;
+        }
+
+        private async Task RadianceMap(List<byte[]> images, List<Vector<double>> g_values)
+        {
+            var folder = ApplicationData.Current.LocalFolder;
+
+            var file = await folder.CreateFileAsync("radiance_map.txt", CreationCollisionOption.ReplaceExisting);
+
+            using (StreamWriter s = new StreamWriter(await file.OpenStreamForWriteAsync()))
+            {
+                await s.WriteAsync("#?RADIANCE\n");
+                await s.WriteAsync("pvalue -s 15 -h -df -r -y " + height.ToString() + " +x " + width.ToString() + "\n");
+                await s.WriteAsync("FORMAT=32-bit_rle_rgbe\n\n");
+                await s.WriteAsync("-Y " + height.ToString() + " +X " + width.ToString() + "\n");
+
+                byte[] image = null;
+                double blueNumerator = 0;
+                double blueDenominator = 0;
+                double greenNumerator = 0;
+                double greenDenominator = 0;
+                double redNumerator = 0;
+                double redDenominator = 0;
+                double blueRadiance = 0;
+                double greenRadiance = 0;
+                double redRadiance = 0;
+                UInt16 value = 0;
+                double weight = 0;
+                Vector<double> g = null;
+                int range = images[0].Length / 4;
+
+                for (int i = 0; i < range; i++)
+                {
+                    for (int j = 0; j < imageCount; j++)
+                    {
+                        image = images[j];
+
+                        value = Convert.ToUInt16(image[i * 4]);
+                        weight = GetWeight(value);
+                        g = g_values[0];
+                        blueNumerator += weight * (g[value] - GetExposureTime(j));
+                        blueDenominator += weight;
+
+                        value = Convert.ToUInt16(image[(i * 4) + 1]);
+                        weight = GetWeight(value);
+                        g = g_values[1];
+                        greenNumerator += weight * (g[value] - GetExposureTime(j));
+                        greenDenominator += weight;
+
+                        value = Convert.ToUInt16(image[(i * 4) + 2]);
+                        weight = GetWeight(value);
+                        g = g_values[2];
+                        redNumerator += weight * (g[value] - GetExposureTime(j));
+                        redDenominator += weight;
+                    }
+
+                    if(blueDenominator == 0 || greenDenominator == 0 || redDenominator == 0)
+                    {
+                        //messageDialog = new MessageDialog("WHAT HAPPENED?");
+                        //await messageDialog.ShowAsync();
+                    }
+
+                    blueRadiance = Math.Pow(Math.E, (blueNumerator / blueDenominator));
+                    greenRadiance = Math.Pow(Math.E, (greenNumerator / greenDenominator));
+                    redRadiance = Math.Pow(Math.E, (redNumerator / redDenominator));
+
+                    /*await s.WriteAsync(blueRadiance.ToString() + " ");
+                    await s.WriteAsync(greenRadiance.ToString() + " ");
+                    await s.WriteAsync(redRadiance.ToString() + " ");
+
+                    if(((i + 1) % width) == 0)
+                    {
+                        await s.WriteAsync("\n");
+                    }*/
+
+                    char[] rgbe = GetRGBE(blueRadiance, greenRadiance, redRadiance);
+                    await s.WriteAsync(rgbe);
+
+                    blueNumerator = 0;
+                    blueDenominator = 0;
+                    greenNumerator = 0;
+                    greenDenominator = 0;
+                    redNumerator = 0;
+                    redDenominator = 0;
+                }
+            }
+        }
+
+        private char[] GetRGBE(double blue, double green, double red)
+        {
+            char[] rgbe= new char[4];
+            double v;
+            int e;
+
+            v = red;
+            if (green > v) v = green;
+            if (blue > v) v = blue;
+            if (v < 1e-32)
+            {
+                rgbe[0] = rgbe[1] = rgbe[2] = rgbe[3] = '0';
+            }
+            else
+            {
+                v = frexp(v, out e) * 256.0 / v;
+                rgbe[0] = (char)(red * v);
+                rgbe[1] = (char)(green * v);
+                rgbe[2] = (char)(blue * v);
+                rgbe[3] = (char)(e + 128);
+            }
+            return rgbe;
+        }
+
+        private double frexp(double x, out int exp)
+        {
+            exp = (int)Math.Floor(Math.Log(x) / Math.Log(2)) + 1;
+            return 1 - (Math.Pow(2, exp) - x) / Math.Pow(2, exp);
         }
 
         private int[] Sample(byte[] image)

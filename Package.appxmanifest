@@ -1,10 +1,10 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Package xmlns="http://schemas.microsoft.com/appx/2010/manifest" xmlns:m2="http://schemas.microsoft.com/appx/2013/manifest" xmlns:m3="http://schemas.microsoft.com/appx/2014/manifest" xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest">
-  <Identity Name="d80f9ae5-379a-4d94-b7df-7b45a57d76d0" Publisher="CN=John" Version="1.0.0.0" />
-  <mp:PhoneIdentity PhoneProductId="d80f9ae5-379a-4d94-b7df-7b45a57d76d0" PhonePublisherId="00000000-0000-0000-0000-000000000000" />
+  <Identity Name="9729UWbadgers16.AdvancedHDR" Publisher="CN=A1ABF66E-0DA5-466A-B4B9-BECF7A323776" Version="1.1.0.0" />
+  <mp:PhoneIdentity PhoneProductId="173a34f0-fdbf-4092-9a87-126db6d08284" PhonePublisherId="00000000-0000-0000-0000-000000000000" />
   <Properties>
-    <DisplayName>HDR</DisplayName>
-    <PublisherDisplayName>John</PublisherDisplayName>
+    <DisplayName>AdvancedHDR</DisplayName>
+    <PublisherDisplayName>UWbadgers16</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
   <Prerequisites>
@@ -16,7 +16,7 @@
   </Resources>
   <Applications>
     <Application Id="App" Executable="$targetnametoken$.exe" EntryPoint="HDR.App">
-      <m3:VisualElements DisplayName="HDR" Square150x150Logo="Assets\Logo.png" Square44x44Logo="Assets\SmallLogo.png" Description="HDR" ForegroundText="light" BackgroundColor="transparent">
+      <m3:VisualElements DisplayName="AdvancedHDR" Square150x150Logo="Assets\Logo.png" Square44x44Logo="Assets\SmallLogo.png" Description="HDR" ForegroundText="light" BackgroundColor="transparent">
         <m3:DefaultTile Wide310x150Logo="Assets\WideLogo.png" Square71x71Logo="Assets\Square71x71Logo.png">
         </m3:DefaultTile>
         <m3:SplashScreen Image="Assets\SplashScreen.png" />

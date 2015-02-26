@@ -49,7 +49,6 @@ namespace HDR
         private double firstExposureTime, secondExposureTime, thirdExposureTime, fourthExposureTime, fifthExposureTime;
         private UInt32 height, width;
         private int bufferSize;
-        private bool autoISO = false;
         private int imageCount = 0;
 
 		public MainPage()
@@ -120,40 +119,17 @@ namespace HDR
             return device;
         }
 
-        private void HDR_High_Click(object sender, RoutedEventArgs e)
+        private void Capture_Click(object sender, RoutedEventArgs e)
         {
-            CaptureImage((float)2);
+            CaptureImage();
         }
 
-        private void HDR_Medium_Click(object sender, RoutedEventArgs e)
-        {
-            CaptureImage((float)1.5);
-        }
 
-        private void HDR_Low_Click(object sender, RoutedEventArgs e)
-        {
-            CaptureImage((float)1);
-        }
-
-        private void ISO_Click(object sender, RoutedEventArgs e)
-        {
-            Button b = (Button)sender;
-            if (!autoISO)
-                b.Content = "Auto ISO";
-            else
-                b.Content = "Min ISO";
-
-            autoISO = !autoISO;
-        }
-
-		private async void CaptureImage(float EV)
+		private async void CaptureImage()
         {
             List<IImageProvider> images = new List<IImageProvider>();
             await mediaCapture.VideoDeviceController.FocusControl.FocusAsync();
-            if(!autoISO)
-                await mediaCapture.VideoDeviceController.IsoSpeedControl.SetValueAsync(mediaCapture.VideoDeviceController.IsoSpeedControl.Min);
-            else
-                await mediaCapture.VideoDeviceController.IsoSpeedControl.SetAutoAsync();
+            await mediaCapture.VideoDeviceController.IsoSpeedControl.SetAutoAsync();
 
             await mediaCapture.VideoDeviceController.ExposureCompensationControl.SetValueAsync(mediaCapture.VideoDeviceController.ExposureCompensationControl.Min);
             var saveImageResults = await SaveImage();
@@ -166,6 +142,7 @@ namespace HDR
             secondExposureTime = saveImageResults.Item2;
 
             await mediaCapture.VideoDeviceController.ExposureCompensationControl.SetValueAsync(0);
+            mediaCapture.VideoDeviceController.Exposure.TrySetValue(0);
             saveImageResults = await SaveImage();
             images.Add(saveImageResults.Item1);
             thirdExposureTime = saveImageResults.Item2;
@@ -219,12 +196,38 @@ namespace HDR
             g_values.Add(x_values[2].SubVector(0,256));
             x_values = null;
 
-            await RadianceMap(pixelImages, g_values);
+            byte[] radianceMap = RadianceMap(pixelImages, g_values);
+            WriteHDRFile(radianceMap);
 
             messageDialog = new MessageDialog("Radiance map complete");
             await messageDialog.ShowAsync();
-
 		}
+
+        private async void WriteHDRFile(byte[] radianceMap)
+        {
+            var folder = ApplicationData.Current.LocalFolder;
+            var file = await folder.CreateFileAsync("radiance_map.hdr", CreationCollisionOption.ReplaceExisting);
+
+            using (IRandomAccessStream fileStream = await file.OpenAsync(FileAccessMode.ReadWrite))
+            {
+                using (IOutputStream outputStream = fileStream.GetOutputStreamAt(0))
+                {
+                    using (DataWriter dataWriter = new DataWriter(outputStream))
+                    {
+                        dataWriter.WriteString("#?RADIANCE\n");
+                        await dataWriter.StoreAsync();
+                        dataWriter.WriteString("pvalue -s 15 -h -df -r -y " + height.ToString() + " +x " + width.ToString() + "\n");
+                        await dataWriter.StoreAsync();
+                        dataWriter.WriteString("FORMAT=32-bit_rle_rgbe\n\n");
+                        await dataWriter.StoreAsync();
+                        dataWriter.WriteString("-Y " + height.ToString() + " +X " + width.ToString() + "\n");
+                        await dataWriter.StoreAsync();
+                        dataWriter.WriteBuffer(radianceMap.AsBuffer(), 0, Convert.ToUInt32(radianceMap.Length));
+                        await dataWriter.StoreAsync();
+                    }
+                }
+            }
+        }
 
         /*private async void WriteHDRToFile()
         {
@@ -445,7 +448,7 @@ namespace HDR
         private List<Vector<double>> PerformHDR(List<byte[]> images)
         {
             List<Vector<double>> x_values = new List<Vector<double>>();
-            int[] samples = Sample(images[imageCount/ 2]);
+            int[] samples = Sample(images[imageCount / 2]);
 
             Matrix<double> A_blue= Matrix<double>.Build.Dense(samples.Length * images.Count + 256 + 1, 256 + samples.Length, 0);
             Vector<double> b_blue = Vector<double>.Build.Dense(A_blue.RowCount, 0);
@@ -454,7 +457,7 @@ namespace HDR
             Matrix<double> A_red = Matrix<double>.Build.Dense(samples.Length * images.Count + 256 + 1, 256 + samples.Length, 0);
             Vector<double> b_red = Vector<double>.Build.Dense(A_red.RowCount, 0);
 
-            double lambda = 300;
+            double lambda = 400;
             double weight = 0;
             byte[] image = null;
             UInt16 value = 0;
@@ -533,18 +536,19 @@ namespace HDR
             return x_values;
         }
 
-        private async Task RadianceMap(List<byte[]> images, List<Vector<double>> g_values)
+        private byte[] RadianceMap(List<byte[]> images, List<Vector<double>> g_values)
         {
-            var folder = ApplicationData.Current.LocalFolder;
+            //var folder = ApplicationData.Current.LocalFolder;
 
-            var file = await folder.CreateFileAsync("radiance_map.txt", CreationCollisionOption.ReplaceExisting);
+            //var file = await folder.CreateFileAsync("radiance_map.hdr", CreationCollisionOption.ReplaceExisting);
 
-            using (StreamWriter s = new StreamWriter(await file.OpenStreamForWriteAsync()))
-            {
-                await s.WriteAsync("#?RADIANCE\n");
+            //using (StreamWriter s = new StreamWriter(await file.OpenStreamForWriteAsync()))
+            //{
+
+                /*await s.WriteAsync("#?RADIANCE\n\n");
                 await s.WriteAsync("pvalue -s 15 -h -df -r -y " + height.ToString() + " +x " + width.ToString() + "\n");
                 await s.WriteAsync("FORMAT=32-bit_rle_rgbe\n\n");
-                await s.WriteAsync("-Y " + height.ToString() + " +X " + width.ToString() + "\n");
+                await s.WriteAsync("-Y " + height.ToString() + " +X " + width.ToString() + "\n");*/
 
                 byte[] image = null;
                 double blueNumerator = 0;
@@ -560,6 +564,7 @@ namespace HDR
                 double weight = 0;
                 Vector<double> g = null;
                 int range = images[0].Length / 4;
+                byte[] radianceMap = new byte[range * 4];
 
                 for (int i = 0; i < range; i++)
                 {
@@ -586,12 +591,6 @@ namespace HDR
                         redDenominator += weight;
                     }
 
-                    if(blueDenominator == 0 || greenDenominator == 0 || redDenominator == 0)
-                    {
-                        //messageDialog = new MessageDialog("WHAT HAPPENED?");
-                        //await messageDialog.ShowAsync();
-                    }
-
                     blueRadiance = Math.Pow(Math.E, (blueNumerator / blueDenominator));
                     greenRadiance = Math.Pow(Math.E, (greenNumerator / greenDenominator));
                     redRadiance = Math.Pow(Math.E, (redNumerator / redDenominator));
@@ -605,8 +604,14 @@ namespace HDR
                         await s.WriteAsync("\n");
                     }*/
 
-                    char[] rgbe = GetRGBE(blueRadiance, greenRadiance, redRadiance);
-                    await s.WriteAsync(rgbe);
+                    byte[] rgbe = new byte[4];
+                    GetRGBE(ref rgbe, blueRadiance, greenRadiance, redRadiance);
+                    radianceMap[i] = rgbe[0];
+                    radianceMap[i+1] = rgbe[1];
+                    radianceMap[i+2] = rgbe[2];
+                    radianceMap[i+3] = rgbe[3];
+
+                    //await s.WriteAsync(rgbe, 0, 4);
 
                     blueNumerator = 0;
                     blueDenominator = 0;
@@ -615,34 +620,35 @@ namespace HDR
                     redNumerator = 0;
                     redDenominator = 0;
                 }
-            }
+
+            //}
+
+                return radianceMap;
         }
 
-        private char[] GetRGBE(double blue, double green, double red)
+        private void GetRGBE(ref byte[] rgbe, double blue, double green, double red)
         {
-            char[] rgbe= new char[4];
             double v;
-            int e;
+            int e = 0;
 
             v = red;
             if (green > v) v = green;
             if (blue > v) v = blue;
             if (v < 1e-32)
             {
-                rgbe[0] = rgbe[1] = rgbe[2] = rgbe[3] = '0';
+                rgbe[0] = rgbe[1] = rgbe[2] = rgbe[3] = 0;
             }
             else
             {
-                v = frexp(v, out e) * 256.0 / v;
-                rgbe[0] = (char)(red * v);
-                rgbe[1] = (char)(green * v);
-                rgbe[2] = (char)(blue * v);
-                rgbe[3] = (char)(e + 128);
+                v = frexp(v, ref e) * 256.0 / v;
+                rgbe[0] = (byte)(red * v);
+                rgbe[1] = (byte)(green * v);
+                rgbe[2] = (byte)(blue * v);
+                rgbe[3] = (byte)(e + 128);
             }
-            return rgbe;
         }
 
-        private double frexp(double x, out int exp)
+        private double frexp(double x, ref int exp)
         {
             exp = (int)Math.Floor(Math.Log(x) / Math.Log(2)) + 1;
             return 1 - (Math.Pow(2, exp) - x) / Math.Pow(2, exp);

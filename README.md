@@ -32,9 +32,10 @@ To obtain the blended image, a radiance map is developed that combines pixels fr
 This process creates a new radiance map internally as a byte array. However, for use outside of the program and to develop the final composite image, proper care must be taken to ensure that the image is in a format readable be the software being used. Luckily, the .hdr format mentioned prevously is (somewhat) well documented. The image is converted to an .hdr format, and output to isolated storage as well for further processing. In the future, tone mapping will be done locally on the device.
 
 ## Results
+![Screenshot](resources/fire1.png)![Screenshot](resources/fire2.png)![Screenshot](resources/fire3.png)![Screenshot](resources/fire4.png)![Screenshot](resources/fire5.png)![Screenshot](resources/fire_hdr.png)
 
 ## Future Work
-As this is a base implemtation, there are several areas to be improved upon. The primary focus moving forward is speeding up the processing. Performing singular value decomposition is a taxing operation, and AdvancedHDR is at the mercy of the underlying libraries for those operations. At present, the SVD of 5 images for R, G, and B response curves takes roughly 130 seconds. Using 3 images tends to take around 90 seconds. Again, these operations are heavily dependent on the number of images, the image size, and the underlying library. In the future, the operation may be passed off to a background task if possible.
+As this is a base implemtation, there are several areas to be improved upon. The primary focus moving forward is speeding up the processing. Performing singular value decomposition is a taxing operation, and AdvancedHDR is at the mercy of the underlying libraries for those operations. At present, the SVD of 5 images for R, G, and B response curves takes roughly 130 seconds. Using 3 images tends to take around 40 seconds. Again, these operations are heavily dependent on the number of images, the image size, and the underlying library. In the future, the operation may be passed off to a background task if possible.
 
 Developing of the radiance map also takes time as each pixel of the resulting image must be individually blended. Larger images (8 MP were used in testing) will have a large affect on the processing time here. 
 

@@ -29,7 +29,6 @@ using MathNet.Numerics.LinearAlgebra.Factorization;
 using System.Diagnostics;
 using MathNet.Numerics.LinearAlgebra;
 using ExifLib;
-using WinRTXamlToolkit.Controls.DataVisualization.Charting;
 using System.Text;
 
 // The Blank Page item template is documented at http://go.microsoft.com/fwlink/?LinkId=391641

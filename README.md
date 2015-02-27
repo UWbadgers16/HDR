@@ -32,6 +32,7 @@ To obtain the blended image, a radiance map is developed that combines pixels fr
 This process creates a new radiance map internally as a byte array. However, for use outside of the program and to develop the final composite image, proper care must be taken to ensure that the image is in a format readable be the software being used. Luckily, the .hdr format mentioned prevously is (somewhat) well documented. The image is converted to an .hdr format, and output to isolated storage as well for further processing. In the future, tone mapping will be done locally on the device.
 
 ## Results
+The images below show a series of bracketed photos and the resulting HDR image. The benefits of HDR are clearly shown as the middle image of medium brightness corresponding to 0 EV doesn't show very much of the background in the distance, while the flames from the fire are just starting to saturate when they were more present in the underexposed images. In the more exposed images, the background becomes more visible, but the fire becomes unrecognizable. The last image shown is after the HDR operation, where the background is very visible and the flames from the fire are also preserved.
 ![Screenshot](resources/fire1.jpg)![Screenshot](resources/fire2.jpg)![Screenshot](resources/fire3.jpg)![Screenshot](resources/fire4.jpg)![Screenshot](resources/fire5.jpg)![Screenshot](resources/fire_hdr.bmp)
 
 ## Future Work

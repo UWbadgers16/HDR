@@ -162,19 +162,17 @@ namespace HDR
 
             await mediaCapture.VideoDeviceController.ExposureCompensationControl.SetValueAsync(0);
 
-            //List<IImageProvider> alignedImages = await AlignImages(images);
-            //images = null;
+            List<IImageProvider> alignedImages = await AlignImages(images);
+            images = null;
 
             for (int i = 0; i < imageCount; i++)
             {
-                await WriteDataToFileAsync(i, await GetPixels(images[0]));
-                images.RemoveAt(0);
+                await WriteImageToFileAsync(i, await GetPixels(alignedImages[0]));
+                alignedImages.RemoveAt(0);
             }
-            images = null;
 
             messageDialog = new MessageDialog("Pixelated images saved to internal storage");
             await messageDialog.ShowAsync();
-
 
             List<byte[]> pixelImages = new List<byte[]>();
             for (int i = 0; i < imageCount; i++)
@@ -196,7 +194,14 @@ namespace HDR
             g_values.Add(x_values[2].SubVector(0,256));
             x_values = null;
 
+            WriteResponseFunctionFile(g_values[0], "blue");
+            WriteResponseFunctionFile(g_values[1], "green");
+            WriteResponseFunctionFile(g_values[2], "red");
+
             byte[] radianceMap = RadianceMap(pixelImages, g_values);
+            pixelImages = null;
+            g_values = null;
+
             WriteHDRFile(radianceMap);
 
             messageDialog = new MessageDialog("Radiance map complete");
@@ -206,7 +211,7 @@ namespace HDR
         private async void WriteHDRFile(byte[] radianceMap)
         {
             var folder = ApplicationData.Current.LocalFolder;
-            var file = await folder.CreateFileAsync(".hdr", CreationCollisionOption.GenerateUniqueName);
+            var file = await folder.CreateFileAsync("radiance_map.hdr", CreationCollisionOption.GenerateUniqueName);
 
             using (IRandomAccessStream fileStream = await file.OpenAsync(FileAccessMode.ReadWrite))
             {
@@ -229,11 +234,34 @@ namespace HDR
             }
         }
 
-        private async Task WriteDataToFileAsync(int image, byte[] data)
+        private async void WriteResponseFunctionFile(Vector<double> response, String color)
+        {
+            var folder = ApplicationData.Current.LocalFolder;
+            var file = await folder.CreateFileAsync(color + ".resp", CreationCollisionOption.ReplaceExisting);
+
+            using (IRandomAccessStream fileStream = await file.OpenAsync(FileAccessMode.ReadWrite))
+            {
+                using (IOutputStream outputStream = fileStream.GetOutputStreamAt(0))
+                {
+                    using (DataWriter dataWriter = new DataWriter(outputStream))
+                    {
+                        for(int i = 0; i < response.Count; i++)
+                        {
+                            dataWriter.WriteString(response[i].ToString());
+                            await dataWriter.StoreAsync();
+                            dataWriter.WriteString("\n");
+                            await dataWriter.StoreAsync();
+                        }
+                    }
+                }
+            }
+        }
+
+        private async Task WriteImageToFileAsync(int image, byte[] data)
         {
             var folder = ApplicationData.Current.LocalFolder;
 
-            var file = await folder.CreateFileAsync(image.ToString(), CreationCollisionOption.ReplaceExisting);
+            var file = await folder.CreateFileAsync(image.ToString() + ".dat", CreationCollisionOption.ReplaceExisting);
 
             using (var s = await file.OpenStreamForWriteAsync())
             {
@@ -252,7 +280,7 @@ namespace HDR
 
             try
             {
-                using (var file = await folder.OpenStreamForReadAsync(fileName))
+                using (var file = await folder.OpenStreamForReadAsync(fileName + ".dat"))
                 {
                     byte[] data = new byte[bufferSize];
                     await file.ReadAsync(data, 0, bufferSize);
@@ -387,7 +415,7 @@ namespace HDR
             }
         }
 
-        /*private async Task<List<byte[]>> GetPixels(List<IImageProvider> alignedSources)
+        private async Task<List<byte[]>> GetPixelsAll(List<IImageProvider> alignedSources)
         {
             List<byte[]> pixelImages = new List<byte[]>();
 
@@ -407,7 +435,7 @@ namespace HDR
 
             alignedSources = null;
             return pixelImages;
-        }*/
+        }
 
         private async Task<byte[]> GetPixels(IImageProvider alignedSource)
         {
@@ -637,60 +665,6 @@ namespace HDR
 
             return samples;
         }
-
-        /*private List<int[]> Sample(byte[] image)
-        {
-            List<int[]> samples = new List<int[]>();
-            int[] blueSamples = new int[128];
-            int[] greenSamples = new int[128];
-            int[] redSamples = new int[128];
-
-            int range = image.Length / 4;
-            Random rand = new Random();
-            int sample = 0;
-
-            for (int i = 0; i < blueSamples.Length; i++)
-            {
-                sample = rand.Next(range);
-
-                while (Convert.ToUInt16(image[sample * 4]) < 5 || Convert.ToUInt16(image[sample * 4]) > 250)
-                {
-                    sample = rand.Next(range); 
-                }
-
-                blueSamples[i] = sample;
-            }
-
-            for (int i = 0; i < greenSamples.Length; i++)
-            {
-                sample = rand.Next(range);
-
-                while (Convert.ToUInt16(image[(sample * 4) + 1]) < 5 || Convert.ToUInt16(image[(sample * 4) + 1]) > 250)
-                {
-                    sample = rand.Next(range);
-                }
-
-                greenSamples[i] = sample;
-            }
-
-            for (int i = 0; i < redSamples.Length; i++)
-            {
-                sample = rand.Next(range);
-
-                while (Convert.ToUInt16(image[(sample * 4) + 2]) < 5 || Convert.ToUInt16(image[(sample * 4) + 2]) > 250)
-                {
-                    sample = rand.Next(range);
-                }
-
-                redSamples[i] = sample;
-            }
-
-            samples.Add(blueSamples);
-            samples.Add(greenSamples);
-            samples.Add(redSamples);
-
-            return samples;
-        }*/
 
         private double GetWeight(UInt16 value)
         {

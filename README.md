@@ -12,7 +12,9 @@ These images are used to find the exposure vs. pixel value response curve for th
 Once the .hdr images are obtained, programs such as [HDR Shop](http://www.hdrshop.com/) can be used to display the .hdr images or run tone mapping algorithms that can map the HDR image to a gamut that is displayable on common displays (eg. computer monitors).
 
 ### Details
-With the first implementation, AdvancedHDR is a bareboned app. The user is presented with a viewfinder and a single button to take a series of bracketed images at varying exposure rates. The rates are currently fixed. ![alt text](resources/screenshot.png)
+With the first implementation, AdvancedHDR is a bareboned app. The user is presented with a viewfinder and a single button to take a series of bracketed images at varying exposure rates. The rates are currently fixed. 
+
+![alt text](resources/screenshot.png)
 
 #### Capturing
 The bracketed photos are taken at varying exposure values (EV). The base implementation doesn't have configurable exposure values, but the range extends from each device's minmum through its maximum exposure value. At present, 5 images are taken, which is the tradeoff for using a smartphone device. The HDR algorithm being used must solve several linear system functions, and the size of the computation is directly proportional to the number of images used. 

@@ -24,6 +24,18 @@ Images are translated into byte pixels within the application for further proces
 #### HDR Algorithm
 Using the 5 bracketed images, the HDR algorithm first performs sampling of pixels to be used in determining the camera's response curve. Currently, 128 pixels are sampled from the image with the middle exposure value (typically 0 EV). These pixels are in the range 5 - 250, as the HDR algorithm breaks down in several under and over saturated regions.
 
-The sampled pixels are determined for each color (RGB) in each image to set up the linear system. In additon, the precise exposure time of each image must be known as well. To this end, the [EXIF tags](http://www.exiv2.org/tags.html) for each image are read using an [ExifLib](https://www.nuget.org/packages/ExifLib/) to supply the exact exposure times. The linear system is solved using singular value decomposition (SVD), supplied by the Math.NET library. The camera response for all three colors (RGB) must be solved for, which requires additonal computation time.
+The sampled pixels are determined for each color (RGB) in each image to set up the linear system. In additon, the precise exposure time of each image must be known as well. To this end, the [EXIF tags](http://www.exiv2.org/tags.html) for each image are read using an [ExifLib](http://www.codeproject.com/Articles/36342/ExifLib-A-Fast-Exif-Data-Extractor-for-NET) to supply the exact exposure times. The linear system is solved using singular value decomposition (SVD), supplied by the Math.NET library. The camera response for all three colors (RGB) must be solved for, which requires additonal computation time. Once the response curves are determined, they're written to isolated storage should anyone be so inclined to read them.
 
-Once the response curves are determined, they're written to isolated storage should anyone be so inclined to read them. 
+#### Radiance Maps
+To obtain the blended image, a radiance map is developed that combines pixels from all images. The exposure for each pixel in the resulting image is computed by performing a weighted average of all pixel values from the 5 images, along with the response curve value for the pixel in question, while taking the specific image's exposure time into account.
+
+This process creates a new radiance map internally as a byte array. However, for use outside of the program and to develop the final composite image, proper care must be taken to ensure that the image is in a format readable be the software being used. Luckily, the .hdr format mentioned prevously is (somewhat) well documented. The image is converted to an .hdr format, and output to isolated storage as well for further processing. In the future, tone mapping will be done locally on the device.
+
+## Results
+
+## Libraries and Acknowledgments
+* [Paul E. Debevec and Jitendra Malik - Recovering High Dynamic Range Radiance Maps from Photographs](http://www.pauldebevec.com/Research/HDR/debevec-siggraph97.pdf)
+* [Lumia Imaging SDK](http://developer.nokia.com/lumia/nokia-apis/imaging)
+* [Math.NET Numerics] (http://numerics.mathdotnet.com/)
+* [ExifLib](http://www.codeproject.com/Articles/36342/ExifLib-A-Fast-Exif-Data-Extractor-for-NET)
+* [RGBE Image Format Specifications](http://www.graphics.cornell.edu/online/formats/rgbe/)

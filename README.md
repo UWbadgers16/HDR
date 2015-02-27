@@ -12,7 +12,7 @@ These images are used to find the exposure vs. pixel value response curve for th
 Once the .hdr images are obtained, programs such as [HDR Shop](http://www.hdrshop.com/) can be used to display the .hdr images or run tone mapping algorithms that can map the HDR image to a gamut that is displayable on common displays (eg. computer monitors).
 
 ### Details
-With the first implementation, AdvancedHDR is a bareboned app. The user is presented with a viewfinder and a single button to take a series of bracketed images at varying exposure rates. The rates are currently fixed. ![Screenshot](resources/screenshot.png)
+With the first implementation, AdvancedHDR is a bareboned app. The user is presented with a viewfinder and a single button to take a series of bracketed images at varying exposure rates. The rates are currently fixed. ![alt text](resources/screenshot.png)
 
 #### Capturing
 The bracketed photos are taken at varying exposure values (EV). The base implementation doesn't have configurable exposure values, but the range extends from each device's minmum through its maximum exposure value. At present, 5 images are taken, which is the tradeoff for using a smartphone device. The HDR algorithm being used must solve several linear system functions, and the size of the computation is directly proportional to the number of images used. 
@@ -32,7 +32,8 @@ To obtain the blended image, a radiance map is developed that combines pixels fr
 This process creates a new radiance map internally as a byte array. However, for use outside of the program and to develop the final composite image, proper care must be taken to ensure that the image is in a format readable be the software being used. Luckily, the .hdr format mentioned prevously is (somewhat) well documented. The image is converted to an .hdr format, and output to isolated storage as well for further processing. In the future, tone mapping will be done locally on the device.
 
 ## Results
-![Screenshot](resources/fire1.jpg)![Screenshot](resources/fire2.jpg)![Screenshot](resources/fire3.jpg)![Screenshot](resources/fire4.jpg)![Screenshot](resources/fire5.jpg)![Screenshot](resources/fire_hdr.bmp)
+![alt text](resources/fire1.jpg)![alt text](resources/fire2.jpg)![alt text](resources/fire3.jpg)![alt text](resources/fire4.jpg)![alt text](resources/fire5.jpg)![alt text](resources/fire_hdr.bmp)
+
 The images above show a series of bracketed photos and the resulting HDR image. The benefits of HDR are clearly shown as the middle image of medium exposure (0 EV) doesn't capture the background in the distance, while the flames from the fire are starting to saturate as the exposure increases. In the more exposed images, the background becomes more visible, but the fire becomes unrecognizable. The last image shown is after the HDR operation, where the background is very visible and the flames from the fire are also preserved.
 
 ## Future Work

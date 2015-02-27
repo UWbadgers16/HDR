@@ -14,4 +14,16 @@ Once the .hdr images are obtained, programs such as [HDR Shop](http://www.hdrsho
 ### Details
 With the first implementation, AdvancedHDR is a bareboned app. The user is presented with a viewfinder and a single button to take a series of bracketed images at varying exposure rates. The rates are currently fixed. ![Screenshot](resources/screenshot.png)
 
+#### Capturing
 The bracketed photos are taken at varying exposure values (EV). The base implementation doesn't have configurable exposure values, but the range extends from each device's minmum through its maximum exposure value. At present, 5 images are taken, which is the tradeoff for using a smartphone device. The HDR algorithm being used must solve several linear system functions, and the size of the computation is directly proportional to the number of images used. 
+
+Once the images are collected, an optimistic alignment is attempted to correct for any motion displacments between images as that leads to [HDR ghosts](http://www.mediachance.com/hdri/help/clip0016.gif). At present, imaging alignment is done using the [Lumia Imaging SDK](http://developer.nokia.com/lumia/nokia-apis/imaging). This implementation doesn't respond well to extreme changes in exposure, and consequently, alignment typically will fail. Future work looks toward implementing more novel image alignment techniques.
+
+Images are translated into byte pixels within the application for further processing within the HDR algorithm.
+
+#### HDR Algorithm
+Using the 5 bracketed images, the HDR algorithm first performs sampling of pixels to be used in determining the camera's response curve. Currently, 128 pixels are sampled from the image with the middle exposure value (typically 0 EV). These pixels are in the range 5 - 250, as the HDR algorithm breaks down in several under and over saturated regions.
+
+The sampled pixels are determined for each color (RGB) in each image to set up the linear system. In additon, the precise exposure time of each image must be known as well. To this end, the [EXIF tags](http://www.exiv2.org/tags.html) for each image are read using an [ExifLib](https://www.nuget.org/packages/ExifLib/) to supply the exact exposure times. The linear system is solved using singular value decomposition (SVD), supplied by the Math.NET library. The camera response for all three colors (RGB) must be solved for, which requires additonal computation time.
+
+Once the response curves are determined, they're written to isolated storage should anyone be so inclined to read them. 

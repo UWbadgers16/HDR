@@ -33,6 +33,15 @@ This process creates a new radiance map internally as a byte array. However, for
 
 ## Results
 
+## Future Work
+As this is a base implemtation, there are several areas to be improved upon. The primary focus moving forward is speeding up the processing. Performing singular value decomposition is a taxing operation, and AdvancedHDR is at the mercy of the underlying libraries for those operations. At present, the SVD of 5 images for R, G, and B response curves takes roughly 130 seconds. Using 3 images tends to take around 90 seconds. Again, these operations are heavily dependent on the number of images, the image size, and the underlying library. In the future, the operation may be passed off to a background task if possible.
+
+Developing of the radiance map also takes time as each pixel of the resulting image must be individually blended. Larger images (8 MP were used in testing) will have a large affect on the processing time here. 
+
+In addition, AdvancedHDR tends to be memory intensive with the various images residing in memory for use in computation. This most improvments can likely be made here in the future.
+
+More advanced and robust image alignment can also be implemented. This is important particularly on handhelds like smartphone were tripods aren't readily available.
+
 ## Libraries and Acknowledgments
 * [Paul E. Debevec and Jitendra Malik - Recovering High Dynamic Range Radiance Maps from Photographs](http://www.pauldebevec.com/Research/HDR/debevec-siggraph97.pdf)
 * [Lumia Imaging SDK](http://developer.nokia.com/lumia/nokia-apis/imaging)
